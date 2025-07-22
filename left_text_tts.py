@@ -25,6 +25,45 @@ def generate_google_tts(text, out_path, lang="hi-IN", voice="hi-IN-Wavenet-D"):
     print(f"✅ TTS audio saved: {out_path}")
 
 def add_left_text_box(video_input, tts_audio, font_path, input_text, output_path):
+    # 📌 Manually wrap text to avoid overflow (you can make this dynamic later)
+    wrapped_text = "यह एक बड़ी खबर है\nजिसने प्रशासन को\nचौंका दिया है।"
+
+    # Position and size of the box
+    box_x = 50
+    box_y = 100
+    box_width = 600
+    box_height = 220
+    text_x = box_x + 20
+    text_y = box_y + 20
+
+    # FFmpeg filter
+    filter_complex = (
+        f"[0:v]drawbox=x={box_x}:y={box_y}:w={box_width}:h={box_height}:"
+        f"color=black@0.5:t=fill,"
+        f"drawtext=fontfile='{font_path}':"
+        f"text='{wrapped_text}':"
+        f"fontcolor=white:fontsize=34:line_spacing=10:"
+        f"x={text_x}:y={text_y}[v]"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", video_input,
+        "-i", tts_audio,
+        "-filter_complex", filter_complex,
+        "-map", "[v]",
+        "-map", "1:a",
+        "-c:v", "libx264",
+        "-c:a", "aac",
+        "-pix_fmt", "yuv420p",
+        "-shortest",
+        output_path
+    ]
+
+    print("▶️ Adding left-side box with wrapped text...")
+    subprocess.run(cmd, check=True)
+    print(f"✅ Final video with boxed text/audio: {output_path}")
+
     # Sanitize input text
     safe_text = input_text.replace("'", "’").replace("\n", " ")
 
@@ -85,7 +124,7 @@ def add_left_text_box(video_input, tts_audio, font_path, input_text, output_path
 
 # 🧪 Example use
 if __name__ == "__main__":
-    input_text = "यह एक बड़ी खबर है जिसने प्रशासन को चौंका दिया है।"
+    input_text = "यह एक बड़ी खबर है जिसने प्रशासन को चौंका दिया है।यह एक बड़ी खबर है जिसने प्रशासन को चौंका दिया है।यह एक बड़ी खबर है जिसने प्रशासन को चौंका दिया है।"
     tts_audio = "output/tts_audio.mp3"
     video_input = "output/right_section.mp4"
     final_output = "output/left_text_with_tts.mp4"
