@@ -1,88 +1,36 @@
+# main.py
 import os
 import subprocess
-import textwrap
-from pydub import AudioSegment
-from google.cloud import texttospeech
 
-# Set your Google credentials
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
+# Sequential steps for generating final bulletin
+def run_script(script_name):
+    print(f"\n▶️ Running {script_name}...")
+    result = subprocess.run(["python", script_name], capture_output=True, text=True)
+    if result.returncode == 0:
+        print(result.stdout)
+    else:
+        print(f"❌ Error in {script_name}:\n{result.stderr}")
+        exit(1)
 
+def main():
+    print("🚀 Generating Full News Bulletin...")
 
-def generate_tts(text, output_audio_path, lang="hi-IN", voice_name="hi-IN-Wavenet-D"):
-    client = texttospeech.TextToSpeechClient()
+    # 1. Add intro (optional step, remove if not used)
+    run_script("base_background.py")
 
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    # 2. Overlay image/video on the right side
+    run_script("right_section.py")
 
-    voice = texttospeech.VoiceSelectionParams(
-        language_code=lang,
-        name=voice_name
-    )
+    # 3. Generate TTS audio and text overlay on left side
+    run_script("left_text_tts.py")
 
-    audio_config = texttospeech.AudioConfig(audio_encoding=texttospeech.AudioEncoding.MP3)
+    # 4. Add scrolling ticker
+    run_script("scrolling_ticker.py")
 
-    response = client.synthesize_speech(input=synthesis_input, voice=voice, audio_config=audio_config)
+    # 5. Merge all parts into full bulletin
+    run_script("merge_all.py")
 
-    with open(output_audio_path, "wb") as out:
-        out.write(response.audio_content)
-        print(f"✅ Google TTS audio saved: {output_audio_path}")
+    print("✅ All done! Final output: output/full_bulletin.mp4")
 
-
-def generate_news_ticker_clip(image_path, audio_path, frame_path, font_path, output_path, text):
-    # Get audio duration
-    audio = AudioSegment.from_file(audio_path)
-    duration = audio.duration_seconds
-
-    # Sanitize scrolling text
-    text_safe = text.replace("'", "’").replace("\n", " ")
-
-    filter_complex = (
-        f"[0:v]scale=1280:720,format=rgba[bg];"
-        f"[2:v]scale=1280:720[frame];"
-        f"[bg][frame]overlay=0:0[framed];"
-        f"[framed]drawtext=fontfile='{font_path}':"
-        f"text='{text_safe}':"
-        f"fontcolor=white:fontsize=38:"
-        f"x=w-mod(t*120\\,w+tw):y=h-55:"
-        f"shadowcolor=black:shadowx=2:shadowy=2[v]"
-    )
-
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-loop", "1",
-        "-t", str(duration),
-        "-i", image_path,
-        "-i", audio_path,
-        "-i", frame_path,
-        "-filter_complex", filter_complex,
-        "-map", "[v]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-c:a", "aac",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        output_path
-    ]
-
-    print(f"▶️ Generating: {output_path}")
-    subprocess.run(cmd, check=True)
-    print(f"✅ Final video saved: {output_path}")
-
-
-# 🧪 Run Example
 if __name__ == "__main__":
-    input_text = "संभल में मिली सैकड़ों मूर्तियाँ प्रशासन को चौंका रही हैं। यह खोज भारत की सांस्कृतिक विरासत के लिए बेहद अहम मानी जा रही है।"
-
-    # 1. Generate audio from text
-    tts_audio_path = "assets/clips/audio_tts.mp3"
-    generate_tts(input_text, tts_audio_path)
-
-    # 2. Create news ticker video
-    generate_news_ticker_clip(
-        image_path="assets/clips/img1.jpg",
-        audio_path=tts_audio_path,
-        frame_path="assets/frame.png",
-        font_path="assets/hindi-bold.ttf",
-        output_path="output/news_ticker_google_tts.mp4",
-        text=input_text
-    )
+    main()
