@@ -1,0 +1,12 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, BackColour, OutlineColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: BoxedText,Noto Sans,38,&H00FFFFFF,&H80000000,&H00000000,1,0,0,0,100,100,0,0,1,2,0,7,70,70,100,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:10.00,BoxedText,,0,0,0,,यह एक बड़ी खबर है जिसने\nप्रशासन को चौंका दिया है।\nपुरातत्व विभाग ने जांच शुरू की है।

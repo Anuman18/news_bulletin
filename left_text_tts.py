@@ -1,10 +1,42 @@
 import os
 import subprocess
-from pydub import AudioSegment
+import textwrap
 from google.cloud import texttospeech
 
 # Google TTS setup
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
+
+def create_ass_subtitle(text, ass_path="text.ass"):
+    import textwrap
+    wrapped_lines = textwrap.wrap(text, width=45, break_long_words=False)
+    ass_events = ""
+    start_time = 0
+    duration = 3  # seconds per line
+
+    for i, line in enumerate(wrapped_lines):
+        start = f"0:00:{start_time:02d}.00"
+        end = f"0:00:{start_time + duration:02d}.00"
+        ass_events += f"Dialogue: 0,{start},{end},BoxedText,,0,0,0,,{line}\\N\n"
+        start_time += duration
+
+    ass_content = f"""[Script Info]
+Title: Left Side Text
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: BoxedText,Noto Sans,36,&H00FFFFFF,&H80000000,-1,0,0,0,100,100,0,7,100,50,100,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+{ass_events}"""
+
+    with open(ass_path, "w", encoding="utf-8") as f:
+        f.write(ass_content)
+    print(f"✅ ASS file created: {ass_path}")
+
 
 def generate_google_tts(text, out_path, lang="hi-IN", voice="hi-IN-Wavenet-D"):
     client = texttospeech.TextToSpeechClient()
@@ -24,198 +56,38 @@ def generate_google_tts(text, out_path, lang="hi-IN", voice="hi-IN-Wavenet-D"):
         out.write(response.audio_content)
     print(f"✅ TTS audio saved: {out_path}")
 
-def add_left_text_box(video_input, tts_audio, font_path, input_text, output_path):
-    import textwrap
+def add_left_text_box(video_input, tts_audio, input_text, output_path):
+    # Create subtitle file
+    create_ass_subtitle(input_text, "text.ass")
 
-    # Wrap text manually
-    wrapped = textwrap.fill(input_text, width=20, break_long_words=False)
-    ffmpeg_safe_text = wrapped.replace('\n', r'\n')
-
-    # Box dimensions and padding
-    box_width = 500
-    box_height = 400
-    box_x = 50
-    box_y = 150
-    text_x = box_x + 20
-    text_y = box_y + 20
-
-    # FFmpeg draw commands
-    filter_complex = (
-        f"[0:v]drawbox=x={box_x}:y={box_y}:w={box_width}:h={box_height}:"
-        f"color=black@0.6:t=fill,"
-        f"drawtext=fontfile='{font_path}':text='{ffmpeg_safe_text}':"
-        f"fontcolor=white:fontsize=36:line_spacing=10:"
-        f"x={text_x}:y={text_y}:box=0[v]"
-    )
-
+    # FFmpeg command to overlay ASS subtitles
     cmd = [
         "ffmpeg", "-y",
         "-i", video_input,
         "-i", tts_audio,
-        "-filter_complex", filter_complex,
-        "-map", "[v]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-c:a", "aac",
+        "-vf", "subtitles=text.ass",
+        "-map", "0:v", "-map", "1:a",
+        "-c:v", "libx264", "-c:a", "aac",
         "-pix_fmt", "yuv420p",
         "-shortest",
         output_path
     ]
 
+    print("🎬 Adding ASS subtitle overlay...")
     subprocess.run(cmd, check=True)
-    print(f"✅ Final video with left-side text/audio box: {output_path}")
-
-    import textwrap
-
-    # Step 1: Wrap text manually at ~25 characters per line (adjust as needed)
-    wrapped_lines = textwrap.fill(input_text, width=25, break_long_words=False).replace('\n', r'\n')
-
-    # Step 2: Define box dimensions (positioned left side)
-    box_x = 50
-    box_y = 100
-    box_width = 700
-    box_height = 300
-    text_x = box_x + 30
-    text_y = box_y + 30
-
-    # Step 3: FFmpeg drawbox + drawtext
-    filter_complex = (
-        f"[0:v]drawbox=x={box_x}:y={box_y}:w={box_width}:h={box_height}:"
-        f"color=black@0.6:t=fill,"
-        f"drawtext=fontfile='{font_path}':"
-        f"text='{wrapped_lines}':"
-        f"fontcolor=white:fontsize=38:line_spacing=10:"
-        f"x={text_x}:y={text_y}[v]"
-    )
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", video_input,
-        "-i", tts_audio,
-        "-filter_complex", filter_complex,
-        "-map", "[v]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-c:a", "aac",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        output_path
-    ]
-
-    print("▶️ Adding properly wrapped text in box...")
-    subprocess.run(cmd, check=True)
-    print(f"✅ Done: {output_path}")
-    # 📌 Manually wrap text to avoid overflow (you can make this dynamic later)
-    wrapped_text = "यह एक बड़ी खबर है\nजिसने प्रशासन को\nचौंका दिया है।"
-
-    # Position and size of the box
-    box_x = 50
-    box_y = 100
-    box_width = 600
-    box_height = 220
-    text_x = box_x + 20
-    text_y = box_y + 20
-
-    # FFmpeg filter
-    filter_complex = (
-        f"[0:v]drawbox=x={box_x}:y={box_y}:w={box_width}:h={box_height}:"
-        f"color=black@0.5:t=fill,"
-        f"drawtext=fontfile='{font_path}':"
-        f"text='{wrapped_text}':"
-        f"fontcolor=white:fontsize=34:line_spacing=10:"
-        f"x={text_x}:y={text_y}[v]"
-    )
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", video_input,
-        "-i", tts_audio,
-        "-filter_complex", filter_complex,
-        "-map", "[v]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-c:a", "aac",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        output_path
-    ]
-
-    print("▶️ Adding left-side box with wrapped text...")
-    subprocess.run(cmd, check=True)
-    print(f"✅ Final video with boxed text/audio: {output_path}")
-
-    # Sanitize input text
-    safe_text = input_text.replace("'", "’").replace("\n", " ")
-
-    # Width and height of the textbox area (adjust as needed)
-    box_width = 600
-    box_height = 300
-    box_x = 50
-    box_y = 100
-
-    filter_complex = (
-        f"[0:v]drawbox=x={box_x}:y={box_y}:w={box_width}:h={box_height}:color=black@0.5:t=fill,"
-        f"drawtext=fontfile='{font_path}':text='{safe_text}':"
-        f"fontcolor=white:fontsize=34:box=0:"
-        f"x={box_x + 20}:y={box_y + 20}:"
-        f"line_spacing=10[v]"
-    )
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", video_input,
-        "-i", tts_audio,
-        "-filter_complex", filter_complex,
-        "-map", "[v]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-c:a", "aac",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        output_path
-    ]
-
-    subprocess.run(cmd, check=True)
-    print(f"✅ Final video with left-side text/audio in box: {output_path}")
-
-    filter_complex = (
-        f"[0:v]drawtext=fontfile='{font_path}':"
-        f"text='{input_text}':fontcolor=white:fontsize=36:"
-        f"x=40:y=100:line_spacing=10:box=1:boxcolor=black@0.5:boxborderw=10[v]"
-    )
-
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", video_input,
-        "-i", tts_audio,
-        "-filter_complex", filter_complex,
-        "-map", "[v]",
-        "-map", "1:a",
-        "-c:v", "libx264",
-        "-c:a", "aac",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        output_path
-    ]
-
-    subprocess.run(cmd, check=True)
-    print(f"✅ Final video with left-side text/audio: {output_path}")
-
+    print(f"✅ Final video generated: {output_path}")
 
 # 🧪 Example use
 if __name__ == "__main__":
     input_text = (
-    "यह एक बड़ी खबर है जिसने बड़ी खबर है जिसने\n"
-    "प्रशासन को चौंका दिया है।बड़ी खबर है जिसने\n"
-    "पुरातत्व विभाग ने जांचबड़ी खबर है जिसने\n"
-    "शुरू की है।बड़ी खबर है जिसने \n"
-    "प्रशासन को चौंका दिया है।बड़ी खबर है जिसने\n"
-    "प्रशासन को चौंका दिया है।बड़ी खबर है जिसने\n"
-)
+        "यह एक बड़ी खबर है जिसने प्रशासन को चौंका दिया है। "
+        "पुरातत्व विभाग ने इस मामले की जांच शुरू की है और यह खोज ऐतिहासिक महत्व की हो सकती है। "
+        "अधिकारियों का कहना है कि मूर्तियों की उत्पत्ति का पता लगाने के लिए गहन अध्ययन किया जाएगा। "
+        "स्थानीय लोग इस खोज को लेकर बेहद उत्साहित हैं।"
+    )
     tts_audio = "output/tts_audio.mp3"
     video_input = "output/right_section.mp4"
     final_output = "output/left_text_with_tts.mp4"
-    font_path = "assets/hindi-bold.ttf"
 
     generate_google_tts(input_text, tts_audio)
-    add_left_text_box(video_input, tts_audio, font_path, input_text, final_output)
+    add_left_text_box(video_input, tts_audio, input_text, final_output)
