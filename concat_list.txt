@@ -1,0 +1,2 @@
+file '/Users/anumanmodi/breaking_news_bulletin/output/intro_muted.mp4'
+file '/Users/anumanmodi/breaking_news_bulletin/output/main_encoded.mp4'

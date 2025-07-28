@@ -97,3 +97,4 @@ if __name__ == "__main__":
     
     generate_google_tts(input_text, tts_audio)
     add_left_text_with_box(video_input, tts_audio, font_path, input_text, final_output)
+    

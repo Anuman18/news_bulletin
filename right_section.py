@@ -1,49 +1,55 @@
 import os
 import subprocess
+from moviepy.editor import VideoFileClip, ImageClip, concatenate_videoclips
+from PIL import Image
+from mutagen.mp3 import MP3
 
-# Paths
-BG_VIDEO = "output/bg_framed.mp4"
-RIGHT_MEDIA = "assets/clips/img1.jpg"  # or .jpg/.png
-OUTPUT = "output/right_section.mp4"
+# Output folder
+OUTPUT_DIR = "output"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Ensure output folder
-os.makedirs("output", exist_ok=True)
+def get_audio_duration(audio_path):
+    audio = MP3(audio_path)
+    return audio.info.length
 
-# Detect whether it's image or video
-is_image = RIGHT_MEDIA.lower().endswith((".jpg", ".png"))
+def prepare_right_clip(media_path, duration, output_path):
+    ext = os.path.splitext(media_path)[1].lower()
+    
+    if ext in ['.jpg', '.jpeg', '.png']:
+        # For image, display it for the full audio duration
+        img = Image.open(media_path)
+        clip = ImageClip(media_path).set_duration(duration).resize(height=720)
+    elif ext in ['.mp4', '.mov', '.avi']:
+        # For video, loop it until it matches the audio duration
+        original = VideoFileClip(media_path)
+        loops = int(duration // original.duration) + 1
+        repeated_clips = [original] * loops
+        final = concatenate_videoclips(repeated_clips).subclip(0, duration)
+        clip = final.resize(height=720)
+    else:
+        raise ValueError("Unsupported file format. Use image or video.")
 
-# Build FFmpeg command
-if is_image:
+    clip.write_videofile(output_path, fps=25, codec='libx264')
+    clip.close()
+
+def merge_audio_with_video(video_path, audio_path, output_path):
     cmd = [
-        "ffmpeg",
-        "-y",
-        "-i", BG_VIDEO,
-        "-loop", "1",
-        "-t", "10",  # adjust duration as needed
-        "-i", RIGHT_MEDIA,
-        "-filter_complex",
-        "[1:v]scale=580:400[right]; [0:v][right]overlay=670:100",
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        OUTPUT
+        "ffmpeg", "-y",
+        "-i", video_path,
+        "-i", audio_path,
+        "-c:v", "copy",
+        "-c:a", "aac",
+        "-shortest", output_path
     ]
-else:
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i", BG_VIDEO,
-        "-i", RIGHT_MEDIA,
-        "-filter_complex",
-        "[1:v]scale=580:400[right]; [0:v][right]overlay=670:100",
-        "-map", "0:a?",  # use audio from bg if exists
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-shortest",
-        OUTPUT
-    ]
+    subprocess.run(cmd, check=True)
 
-# Run command
-print("▶️ Adding right-side media...")
-subprocess.run(cmd, check=True)
-print(f"✅ Right-side section video saved: {OUTPUT}")
+# Example usage
+media_path = "assets/sample_video.mp4"     # or use an image like "assets/sample_image.jpg"
+audio_path = "output/tts_audio.mp3"
+temp_video = os.path.join(OUTPUT_DIR, "right_temp.mp4")
+final_output = os.path.join(OUTPUT_DIR, "right_section.mp4")
+
+# Generate final video
+audio_duration = get_audio_duration(audio_path)
+prepare_right_clip(media_path, audio_duration, temp_video)
+merge_audio_with_video(temp_video, audio_path, final_output)
