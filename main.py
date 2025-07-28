@@ -200,9 +200,81 @@ def calculate_word_timings(text, total_duration):
     
     return word_timings
 
+def wrap_text_for_display(text, max_chars_per_line=35):
+    """Wrap text into multiple lines for better display"""
+    words = text.split()
+    lines = []
+    current_line = ""
+    
+    for word in words:
+        # Check if adding this word would exceed the line limit
+        if len(current_line + " " + word) <= max_chars_per_line:
+            if current_line:
+                current_line += " " + word
+            else:
+                current_line = word
+        else:
+            # Start a new line
+            if current_line:
+                lines.append(current_line)
+            current_line = word
+    
+    # Add the last line
+    if current_line:
+        lines.append(current_line)
+    
+    return lines
+
+def create_animated_text_filter(text, font_path, font_size, x, y, duration, line_height=55):
+    """Create FFmpeg filter for word-by-word animated text with proper wrapping"""
+    lines = wrap_text_for_display(text, max_chars_per_line=35)
+    words = text.split()
+    
+    if not words:
+        return ""
+    
+    # Calculate timing for each word
+    time_per_word = (duration - 1.0) / len(words)  # Leave 1 second at the end
+    
+    filters = []
+    word_index = 0
+    
+    for line_num, line in enumerate(lines):
+        line_words = line.split()
+        current_y = y + (line_num * line_height)
+        
+        for word_pos, word in enumerate(line_words):
+            start_time = 1.0 + (word_index * time_per_word)  # Start after 1 second
+            
+            # Calculate x position for this word in the line
+            words_before = " ".join(line_words[:word_pos])
+            if words_before:
+                # Estimate character width (approximate)
+                char_width = font_size * 0.6  # Rough estimate for Hindi text
+                word_x = x + len(words_before) * char_width
+            else:
+                word_x = x
+            
+            # Escape the word for FFmpeg
+            safe_word = escape_text_for_ffmpeg(word)
+            
+            # Create filter for this word with fade-in effect
+            word_filter = (
+                f"drawtext=fontfile={font_path}:text='{safe_word}':"
+                f"fontcolor=white:fontsize={font_size}:"
+                f"x={word_x}:y={current_y}:"
+                f"shadowcolor=black@0.9:shadowx=3:shadowy=3:"
+                f"enable='gte(t,{start_time})'"
+            )
+            
+            filters.append(word_filter)
+            word_index += 1
+    
+    return ",".join(filters)
+
 def create_main_layout(bg, audio, text, media_clip, out_path, top_headline, duration):
-    """Create layout with proper FFmpeg filter syntax"""
-    print(f"🎨 Creating layout with logo and text animation...")
+    """Create layout with proper FFmpeg filter syntax and word-by-word animation"""
+    print(f"🎨 Creating layout with logo and animated text...")
 
     # --- Layout Constants for 1920x1080 ---
     VIDEO_WIDTH = 1920
@@ -231,9 +303,9 @@ def create_main_layout(bg, audio, text, media_clip, out_path, top_headline, dura
     media_window_y = 150   
 
     # Text positioning within the text box
-    text_x = text_box_x + 150 
+    text_x = text_box_x + 50  # More margin from left
     text_y = text_box_y + 60 
-    font_size = 45  
+    font_size = 40  # Slightly smaller for better line fitting
 
     # "ताजा खबर" section
     news_label_y = 850
@@ -241,21 +313,25 @@ def create_main_layout(bg, audio, text, media_clip, out_path, top_headline, dura
 
     # Prepare text with proper escaping for FFmpeg
     safe_headline = escape_text_for_ffmpeg(top_headline)
-    safe_text = escape_text_for_ffmpeg(text)
+    
+    # Create animated text filter
+    animated_text_filter = create_animated_text_filter(
+        text, FONT_PATH, font_size, text_x, text_y, duration
+    )
 
     # Create the complete filter string
     filter_string = (
         f"[0:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT},format=yuv420p[bg_scaled];"
         f"[bg_scaled]drawbox=x=0:y={headline_y}:w={VIDEO_WIDTH}:h={headline_height}:color=0xCC0000@1.0:t=fill[headline_bg];"
-        f"[headline_bg]drawtext=fontfile={FONT_PATH}:text={safe_headline}:fontcolor=white:fontsize=42:x=80:y={headline_y + 25}:shadowcolor=black@0.8:shadowx=3:shadowy=3:enable=gte\\(t\\,0.5\\)[headline_applied];"
+        f"[headline_bg]drawtext=fontfile={FONT_PATH}:text='{safe_headline}':fontcolor=white:fontsize=42:x=80:y={headline_y + 25}:shadowcolor=black@0.8:shadowx=3:shadowy=3:enable='gte(t,0.5)'[headline_applied];"
         f"[headline_applied]drawbox=x={text_box_x}:y={text_box_y}:w={text_box_width}:h={text_box_height}:color=0x003399@0.95:t=fill[text_bg];"
-        f"[text_bg]drawtext=fontfile={FONT_PATH}:text={safe_text}:fontcolor=white:fontsize={font_size}:x={text_x}:y={text_y}:shadowcolor=black@0.9:shadowx=3:shadowy=3:enable=gte\\(t\\,1.0\\)[text_applied];"
+        f"[text_bg]{animated_text_filter}[text_applied];"
         f"[text_applied]drawbox=x={media_window_x - 10}:y={media_window_y - 10}:w={media_window_width + 20}:h={media_window_height + 20}:color=white@1.0:t=fill[media_border];"
-        f"[media_border][1:v]overlay={media_window_x}:{media_window_y}:enable=gte\\(t\\,1.0\\)[media_applied];"
+        f"[media_border][1:v]overlay={media_window_x}:{media_window_y}:enable='gte(t,1.0)'[media_applied];"
         f"[3:v]scale={logo_width}:{logo_height}[logo_scaled];"
-        f"[media_applied][logo_scaled]overlay={logo_x}:{logo_y}:enable=gte\\(t\\,0.8\\)[logo_applied];"
+        f"[media_applied][logo_scaled]overlay={logo_x}:{logo_y}:enable='gte(t,0.8)'[logo_applied];"
         f"[logo_applied]drawbox=x=0:y={news_label_y}:w=450:h={news_label_height}:color=0xCC0000@1.0:t=fill[news_label_bg];"
-        f"[news_label_bg]drawtext=fontfile={FONT_PATH}:text=ताजा खबर:fontcolor=yellow:fontsize=48:x=25:y={news_label_y + 18}:shadowcolor=black@0.8:shadowx=3:shadowy=3:enable=gte\\(t\\,2.0\\)[final]"
+        f"[news_label_bg]drawtext=fontfile={FONT_PATH}:text='ताजा खबर':fontcolor=yellow:fontsize=48:x=25:y={news_label_y + 18}:shadowcolor=black@0.8:shadowx=3:shadowy=3:enable='gte(t,2.0)'[final]"
     )
 
     cmd = [
@@ -285,7 +361,7 @@ def create_main_layout(bg, audio, text, media_clip, out_path, top_headline, dura
         print(" ".join(cmd))
         raise Exception("Layout creation failed")
     
-    print(f"✅ Layout with logo generated: {out_path}")
+    print(f"✅ Layout with animated text generated: {out_path}")
 
 def escape_text_for_ffmpeg(text):
     """Properly escape text for FFmpeg drawtext filter"""
@@ -694,6 +770,7 @@ def main():
     print("\n🎨 Features Added:")
     print("   ✅ Logo in top-right corner with fade-in animation")
     print("   ✅ Word-by-word text animation synchronized with TTS")
+    print("   ✅ Text properly wrapped in paragraph format")
     print("   ✅ Smooth fade-in effects for all elements")
     print("   ✅ Animated ticker with slide-up effect")
     print("   ✅ Transition animations between segments")
@@ -736,6 +813,7 @@ if __name__ == "__main__":
     print("📋 Features:")
     print("   • Logo in top-right corner")
     print("   • Word-by-word text animation sync with TTS")
+    print("   • Text wrapped in paragraph format")
     print("   • Professional bulletin animations")
     print("   • Animated ticker and transitions")
     print("   • High-quality Google TTS voice")
