@@ -200,19 +200,17 @@ def calculate_word_timings(text, total_duration):
     
     return word_timings
 
-def wrap_text_for_display(text, max_chars_per_line=35):
-    """Wrap text into multiple lines for better display"""
+def wrap_text_for_display(text, max_chars_per_line=30):
+    """Wrap text into multiple lines for better display with improved spacing"""
     words = text.split()
     lines = []
     current_line = ""
     
     for word in words:
         # Check if adding this word would exceed the line limit
-        if len(current_line + " " + word) <= max_chars_per_line:
-            if current_line:
-                current_line += " " + word
-            else:
-                current_line = word
+        test_line = current_line + " " + word if current_line else word
+        if len(test_line) <= max_chars_per_line:
+            current_line = test_line
         else:
             # Start a new line
             if current_line:
@@ -225,9 +223,9 @@ def wrap_text_for_display(text, max_chars_per_line=35):
     
     return lines
 
-def create_animated_text_filter(text, font_path, font_size, x, y, duration, line_height=55):
-    """Create FFmpeg filter for word-by-word animated text with proper wrapping"""
-    lines = wrap_text_for_display(text, max_chars_per_line=35)
+def create_animated_text_filter(text, font_path, font_size, x, y, duration, line_height=65):
+    """Create FFmpeg filter for word-by-word animated text with proper wrapping and alignment"""
+    lines = wrap_text_for_display(text, max_chars_per_line=30)
     words = text.split()
     
     if not words:
@@ -246,19 +244,20 @@ def create_animated_text_filter(text, font_path, font_size, x, y, duration, line
         for word_pos, word in enumerate(line_words):
             start_time = 1.0 + (word_index * time_per_word)  # Start after 1 second
             
-            # Calculate x position for this word in the line
-            words_before = " ".join(line_words[:word_pos])
-            if words_before:
-                # Estimate character width (approximate)
-                char_width = font_size * 0.6  # Rough estimate for Hindi text
-                word_x = x + len(words_before) * char_width
+            # Calculate x position for this word in the line - better spacing
+            if word_pos == 0:
+                word_x = x  # First word starts at line beginning
             else:
-                word_x = x
+                # Calculate cumulative width of previous words with better spacing
+                prev_words = " ".join(line_words[:word_pos])
+                # Use more accurate character width calculation for Hindi
+                char_width = font_size * 0.65  # Adjusted for Hindi characters
+                word_x = x + len(prev_words + " ") * char_width
             
             # Escape the word for FFmpeg
             safe_word = escape_text_for_ffmpeg(word)
             
-            # Create filter for this word with fade-in effect
+            # Create filter for this word with consistent baseline alignment
             word_filter = (
                 f"drawtext=fontfile={font_path}:text='{safe_word}':"
                 f"fontcolor=white:fontsize={font_size}:"
@@ -303,9 +302,9 @@ def create_main_layout(bg, audio, text, media_clip, out_path, top_headline, dura
     media_window_y = 150   
 
     # Text positioning within the text box
-    text_x = text_box_x + 50  # More margin from left
-    text_y = text_box_y + 60 
-    font_size = 40  # Slightly smaller for better line fitting
+    text_x = text_box_x + 60  # Better margin from left
+    text_y = text_box_y + 80  # More space from top
+    font_size = 42  # Optimal size for readability
 
     # "ताजा खबर" section
     news_label_y = 850
