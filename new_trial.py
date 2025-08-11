@@ -90,7 +90,7 @@ LOGO_Y = 30
 
 # ADJUSTED: Move text overlay higher up so it fits within frame
 TEXT_OVERLAY_X = 60
-TEXT_OVERLAY_Y = 50  # Changed from 100 to 50 - moved up
+TEXT_OVERLAY_Y = 40  # Changed from 50 to 40 - moved up
 TEXT_OVERLAY_WIDTH = 800
 TEXT_OVERLAY_HEIGHT = 100
 
@@ -405,16 +405,17 @@ def _render_text_with_outline(draw: ImageDraw.ImageDraw, xy: Tuple[int, int], te
 
 def create_text_overlay_pil(text: str, duration: float) -> Optional[ImageClip]:
     """
-    Pure PIL text overlay - ADJUSTED position to be higher up (50 instead of 100)
+    Pure PIL text overlay - BIGGER text size to cover more frame area
     """
     try:
         if not text or not text.strip():
             return None
         canvas = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
-        font = _load_font(50)
+        # INCREASED font size from 50 to 80 for bigger headline
+        font = _load_font(80)
         
-        # ADJUSTED: Y position changed from 100 to 50
+        # Position at top left, slightly adjusted for bigger text
         _render_text_with_outline(draw, (TEXT_OVERLAY_X, TEXT_OVERLAY_Y), text, font)
         
         return ImageClip(np.array(canvas), transparent=True, duration=duration)
@@ -430,7 +431,7 @@ def _measure_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeType
 
 def create_scrolling_ticker_pil(ticker_text: str, duration: float, speed_px_per_s: int = 150) -> VideoClip:
     """
-    Build a PIL-based scrolling ticker (no TextClip dependency). Opaque red bar.
+    Build a PIL-based scrolling ticker with improved Breaking News badge
     """
     # build base bar
     bar_w, bar_h = VIDEO_WIDTH, TICKER_HEIGHT
@@ -449,26 +450,30 @@ def create_scrolling_ticker_pil(ticker_text: str, duration: float, speed_px_per_
     _render_text_with_outline(sd, (0, (strip_h - text_h)//2), text_for_strip, font)
 
     strip_np = np.array(strip_img)
+    
+    # BIGGER Breaking News badge dimensions
+    badge_w, badge_h = 250, TICKER_HEIGHT - 10  # Made wider and full ticker height
 
     def make_frame(t: float):
-        # base bar
-        frame = Image.new("RGB", (bar_w, bar_h), (180, 20, 30))
-        # gradient shine top  (subtle)
+        # base bar with darker red for better contrast
+        frame = Image.new("RGB", (bar_w, bar_h), (160, 20, 30))
+        
+        # gradient shine top (subtle)
         g = ImageDraw.Draw(frame)
-        for i in range(bar_h // 2):
-            alpha = int(100 - i * 2)
+        for i in range(bar_h // 3):
+            alpha = int(80 - i * 2)
             if alpha < 0: alpha = 0
-            g.line([(0, i), (bar_w, i)], fill=(255, 255, 255,))
+            g.line([(0, i), (bar_w, i)], fill=(200, 40, 50))
 
-        # compute x based on time
+        # compute x based on time - START FROM badge width so text doesn't overlap initially
         shift = int((t * speed_px_per_s) % (strip_w + bar_w))
-        x = bar_w - shift
-        # paste strip on frame
+        x = badge_w + 20 - shift  # Start after badge with some padding
+        
+        # paste strip on frame (BEFORE badge so it goes behind)
         frame_np = np.array(frame).astype(np.uint8)
-        # blit the strip with alpha onto frame
-        # compute region
-        y = (bar_h - strip_h) // 2
+        
         # handle partially visible region
+        y = (bar_h - strip_h) // 2
         left = max(0, x)
         right = min(bar_w, x + strip_w)
         if right > left:
@@ -483,26 +488,48 @@ def create_scrolling_ticker_pil(ticker_text: str, duration: float, speed_px_per_
                 (1 - alpha) * frame_np[y:y+strip_h, dst_x1:dst_x2, :] + alpha * sub[:, :, :3]
             ).astype(np.uint8)
 
-        # left badge (BREAKING / NEWS)
-        badge_w, badge_h = 200, 80
-        badge = Image.new("RGBA", (badge_w, badge_h), (255, 255, 255, 255))
+        # IMPROVED Breaking News badge (drawn AFTER text so it covers it)
+        # Full height badge with better design
+        badge = Image.new("RGBA", (badge_w, badge_h), (0, 0, 0, 0))
         bd = ImageDraw.Draw(badge)
-        bd.rectangle([0, 0, badge_w, 10], fill=(220, 20, 60))
-        bd.rectangle([0, badge_h-10, badge_w, badge_h], fill=(220, 20, 60))
-        f1 = _load_font(32)
-        f2 = _load_font(24)
-        _render_text_with_outline(bd, (badge_w//2 - 60, 15), "BREAKING", f1, (255, 0, 0, 255))
-        _render_text_with_outline(bd, (badge_w//2 - 30, 45), "NEWS", f2, (0, 0, 0, 255))
+        
+        # Main badge background with gradient effect
+        bd.rectangle([0, 0, badge_w, badge_h], fill=(255, 255, 255, 255))
+        
+        # Red accent bars - top and bottom
+        bd.rectangle([0, 0, badge_w, 12], fill=(220, 20, 60))
+        bd.rectangle([0, badge_h-12, badge_w, badge_h], fill=(220, 20, 60))
+        
+        # Side accent
+        bd.rectangle([0, 0, 5, badge_h], fill=(220, 20, 60))
+        bd.rectangle([badge_w-5, 0, badge_w, badge_h], fill=(220, 20, 60))
+        
+        # Text with better positioning
+        f1 = _load_font(40)  # Bigger font for BREAKING
+        f2 = _load_font(32)  # Bigger font for NEWS
+        
+        # Center the text properly
+        breaking_text = "BREAKING"
+        news_text = "NEWS"
+        
+        # Calculate text positions for centering
+        b_bbox = bd.textbbox((0, 0), breaking_text, font=f1)
+        b_width = b_bbox[2] - b_bbox[0]
+        n_bbox = bd.textbbox((0, 0), news_text, font=f2)
+        n_width = n_bbox[2] - n_bbox[0]
+        
+        # Draw centered text
+        _render_text_with_outline(bd, ((badge_w - b_width)//2, 20), breaking_text, f1, (220, 20, 60, 255))
+        _render_text_with_outline(bd, ((badge_w - n_width)//2, 55), news_text, f2, (40, 40, 40, 255))
+        
         badge_np = np.array(badge)
 
-        # paste badge
-        bx = 20
-        by = (bar_h - badge_h)//2
-        # alpha blend
-        alpha_b = badge_np[:, :, 3:4] / 255.0
-        frame_np[by:by+badge_h, bx:bx+badge_w, :] = (
-            (1 - alpha_b) * frame_np[by:by+badge_h, bx:bx+badge_w, :] + alpha_b * badge_np[:, :, :3]
-        ).astype(np.uint8)
+        # paste badge at left corner (covering any text that might be there)
+        bx = 0  # Start from absolute left
+        by = 5  # Small margin from top
+        
+        # Direct paste for opaque badge (no alpha blending needed for full opacity areas)
+        frame_np[by:by+badge_h, bx:bx+badge_w, :] = badge_np[:, :, :3]
 
         return frame_np
 
