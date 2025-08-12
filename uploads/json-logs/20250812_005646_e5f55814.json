@@ -1,0 +1,59 @@
+{
+  "session_id": "20250812_005646_e5f55814",
+  "timestamp": "2025-08-12T00:58:32.404713",
+  "request": {
+    "data": [
+      {
+        "id": "bulletin_001",
+        "logo_url": "https://api.mojonetwork.in/upload/website_images/6888707ee008a.png",
+        "language_code": "hi-IN",
+        "language_name": "Hindi",
+        "ticker": "ब्रेकिंग न्यूज़: पन्ना में वन विभाग की दादागिरी • किसानों पर केस दर्ज करने की धमकी • किसान संगठनों ने किया विरोध • मुख्यमंत्री ने दिए जांच के आदेश • मौसम विभाग ने जताई भारी बारिश की संभावना • शेयर बाजार में गिरावट दर्ज",
+        "background_url": "https://api.mojonetwork.in/assets/video-player/earth_bg.mp4",
+        "story_thumbnail": null,
+        "generated_story_url": null,
+        "content": [
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892eea2bc4c2.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_with_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/689302d3be80e.mp4",
+            "frame_url": "https://api.mojonetwork.in/assets/video-player/default_frame.png",
+            "text": "नमस्कार, मैं हूँ विनीत रिंगे और आप देख रहे हैं पन्ना न्यूज़ बुलेटिन. पन्ना की हर बड़ी और ज़रूरी ख़बर, सीधे आपके शहर से, आपकी भाषा में। यहाँ आपको मिलेंगी सबसे तेज़ और भरोसेमंद अपडेट राजनीति से समाज तक, और विकास से जुड़ी हर अहम जानकारी। तो चलिए, शुरू करते हैं आज का बुलेटिन",
+            "top_headline": "Breaking News",
+            "bottom_headline": null,
+            "duration": null
+          }
+        ]
+      }
+    ]
+  },
+  "response": {
+    "status": true,
+    "message": "Generated 1/1 bulletins successfully",
+    "session_id": "20250812_005646_e5f55814",
+    "data": [
+      {
+        "id": "bulletin_001",
+        "session_id": "20250812_005646_e5f55814_bulletin_001",
+        "status": "completed",
+        "video_url": "/video-bulletin/bulletin_bulletin_001_20250812_005646_e5f55814_bulletin_001.mp4",
+        "thumbnail_url": "/thumbnails/thumb_bulletin_001_20250812_005646_e5f55814_bulletin_001.jpg",
+        "video_path": "/Users/anumanmodi/breaking_news_bulletin/uploads/video-bulletin/bulletin_bulletin_001_20250812_005646_e5f55814_bulletin_001.mp4",
+        "thumbnail_path": "/Users/anumanmodi/breaking_news_bulletin/uploads/thumbnails/thumb_bulletin_001_20250812_005646_e5f55814_bulletin_001.jpg",
+        "duration": 14.4,
+        "resolution": "1920x1080",
+        "file_size_mb": 4.98,
+        "segments_processed": 2,
+        "generated_at": "2025-08-12T00:58:32.404049"
+      }
+    ]
+  }
+}

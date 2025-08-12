@@ -1,0 +1,84 @@
+{
+  "session_id": "20250812_011225_404b4905",
+  "timestamp": "2025-08-12T01:18:25.366950",
+  "request": {
+    "status": true,
+    "message": "Show all data",
+    "data": [
+      {
+        "id": "bulletin_001",
+        "logo_url": "https://api.mojonetwork.in/upload/website_images/6888707ee008a.png",
+        "language_code": "hi-IN",
+        "language_name": "Hindi",
+        "ticker": "ब्रेकिंग न्यूज़: पन्ना में वन विभाग की दादागिरी • किसानों पर केस दर्ज करने की धमकी • किसान संगठनों ने किया विरोध • मुख्यमंत्री ने दिए जांच के आदेश • मौसम विभाग ने जताई भारी बारिश की संभावना • शेयर बाजार में गिरावट दर्ज",
+        "background_url": "https://api.mojonetwork.in/assets/video-player/earth_bg.mp4",
+        "story_thumbnail": null,
+        "generated_story_url": null,
+        "content": [
+          {
+            "segment_type": "intro",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/intro.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "main_news",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/sample_video.mp4",
+            "frame_url": "https://api.mojonetwork.in/upload/video_frames/bulletin_frame_2.png",
+            "text": "नमस्कार दर्शकों, आज की मुख्य खबर में, पन्ना जिले में वन विभाग की कथित दादागिरी से किसानों में रोष व्याप्त है। स्थानीय किसानों का आरोप है कि वन विभाग के अधिकारी राजस्व भूमि पर खेती करने वाले किसानों को परेशान कर रहे हैं और उन पर झूठे केस दर्ज करने की धमकी दे रहे हैं।",
+            "top_headline": "मुख्य समाचार",
+            "bottom_headline": "वन विभाग की दादागिरी • किसानों पर केस दर्ज करने की धमकी",
+            "duration": null
+          },
+          {
+            "segment_type": "main_news",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/sample_video2.mp4",
+            "frame_url": "https://api.mojonetwork.in/upload/video_frames/bulletin_frame_2.png",
+            "text": "मौसम विभाग ने अगले 48 घंटों में भारी बारिश की चेतावनी जारी की है। कई जिलों में बाढ़ जैसी स्थिति बनने की संभावना है, प्रशासन ने लोगों को सुरक्षित स्थानों पर जाने की अपील की है।",
+            "top_headline": "मौसम चेतावनी",
+            "bottom_headline": "अगले 48 घंटे भारी बारिश • प्रशासन ने की सतर्क रहने की अपील",
+            "duration": null
+          },
+          {
+            "segment_type": "main_news",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/sample_video3.mp4",
+            "frame_url": "https://api.mojonetwork.in/upload/video_frames/bulletin_frame_2.png",
+            "text": "शेयर बाजार में आज भारी गिरावट दर्ज की गई, सेंसेक्स 500 अंकों से नीचे बंद हुआ जबकि निफ्टी में भी 200 अंकों की गिरावट देखी गई। विशेषज्ञों का कहना है कि यह अंतरराष्ट्रीय आर्थिक परिस्थितियों के कारण हुआ है।",
+            "top_headline": "शेयर बाजार अपडेट",
+            "bottom_headline": "सेंसेक्स 500 अंक गिरा • निफ्टी में 200 अंकों की गिरावट",
+            "duration": null
+          },
+          {
+            "segment_type": "outro",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/outro.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          }
+        ]
+      }
+    ]
+  },
+  "response": {
+    "status": true,
+    "message": "Generated 1/1 bulletins",
+    "session_id": "20250812_011225_404b4905",
+    "data": [
+      {
+        "id": "bulletin_001",
+        "session_id": "20250812_011225_404b4905_bulletin_001",
+        "status": "completed",
+        "video_url": "/video-bulletin/bulletin_bulletin_001_20250812_011225_404b4905_bulletin_001.mp4",
+        "thumbnail_url": "/thumbnails/thumb_bulletin_001_20250812_011225_404b4905_bulletin_001.jpg",
+        "duration": 53.559999999999995,
+        "file_size_mb": 16.24,
+        "generated_at": "2025-08-12T01:18:25.366686"
+      }
+    ]
+  }
+}

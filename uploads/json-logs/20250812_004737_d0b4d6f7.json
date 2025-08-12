@@ -1,0 +1,160 @@
+{
+  "session_id": "20250812_004737_d0b4d6f7",
+  "timestamp": "2025-08-12T00:49:40.628722",
+  "request": {
+    "data": [
+      {
+        "id": "bulletin_001",
+        "logo_url": "https://api.mojonetwork.in/upload/website_images/6888707ee008a.png",
+        "language_code": "hi-IN",
+        "language_name": "Hindi",
+        "ticker": "ब्रेकिंग न्यूज़: पन्ना में वन विभाग की दादागिरी • किसानों पर केस दर्ज करने की धमकी • किसान संगठनों ने किया विरोध • मुख्यमंत्री ने दिए जांच के आदेश • मौसम विभाग ने जताई भारी बारिश की संभावना • शेयर बाजार में गिरावट दर्ज",
+        "background_url": "https://api.mojonetwork.in/assets/video-player/earth_bg.mp4",
+        "story_thumbnail": null,
+        "generated_story_url": null,
+        "content": [
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892eea2bc4c2.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_with_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/689302d3be80e.mp4",
+            "frame_url": "https://api.mojonetwork.in/assets/video-player/default_frame.png",
+            "text": "नमस्कार, मैं हूँ विनीत रिंगे और आप देख रहे हैं पन्ना न्यूज़ बुलेटिन. पन्ना की हर बड़ी और ज़रूरी ख़बर, सीधे आपके शहर से, आपकी भाषा में। यहाँ आपको मिलेंगी सबसे तेज़ और भरोसेमंद अपडेट राजनीति से समाज तक, और विकास से जुड़ी हर अहम जानकारी। तो चलिए, शुरू करते हैं आज का बुलेटिन",
+            "top_headline": "Breaking News",
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892f13da26ec.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_with_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/689302d3c2dd0.mp4",
+            "frame_url": "https://api.mojonetwork.in/assets/video-player/default_frame.png",
+            "text": "पवई वन विभाग कार्यालय अरण्य भवन के परिसर में सोमवार को करौंदा की झाड़ में आकर्षण और पूरी तरह से जहर रहे ब्रांच बैंक की नाग मिला इस दुर्लभ नाग को पवई उपमंडल कार्यालय में कार्यरत कंप्यूटर ऑपरेटर सागर सोनी ने देखा और कमरे में कैद किया पतली लंबी और फर्टाइल शरीर वाले यह सांप पेड़ों में और झाड़ियां पर सक्रिय रहते हैं.",
+            "top_headline": "Breaking News",
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892f13da26ec.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_with_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/689302d3c84bb.mp4",
+            "frame_url": "https://api.mojonetwork.in/assets/video-player/default_frame.png",
+            "text": "एक दुष्कर्म मामले में पन्ना जिले की बाल कल्याण समिति वनिष्ठा केंद्र और महिला बाल विकास ने लापरवाही की हद पार कर दी है नाबालिक से दुष्कर्म मामले में बाल कल्याण समिति ने नियमों को तात्पर्य रखकर फैसले लिए फिरता को ही आरोपी के घर भेज दिया जहां उसके साथ दोबारा दुष्कर्म हुआ वरना पुलिस ने इस मामले में कार्रवाई करते हुए जीरो पर टाइमिंग करते हुए दुष्कर्म के आरोपी के खिलाफ मामला दर्ज किया है.",
+            "top_headline": "Breaking News",
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892f13da26ec.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_with_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/689302d3cc86b.mp4",
+            "frame_url": "https://api.mojonetwork.in/assets/video-player/default_frame.png",
+            "text": "पन्ना जिले की बड़कोला ग्राम पंचायत के किसानों ने वन विभाग पर गंभीर आरोप लगाए हैं किसानों का कहना है कि वन विभाग के अधिकारी उन्हें उनके राजस्व भूमि पर खेती करने से रोक रहे हैं और वन अधिनियम के तहत झूठे मुकदमे दर्ज करने की धमकी दे रहे हैं.",
+            "top_headline": "Breaking News",
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892f13da26ec.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_with_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/689302d3d0397.mp4",
+            "frame_url": "https://api.mojonetwork.in/assets/video-player/default_frame.png",
+            "text": "शाहनगर विकासखंड के पशु चिकित्सा अधिकारी डॉक्टर बी एस तिवारी की मंगलवार सुबह संदिग्ध परिस्थितियों में मौत हो गई उनका शौक शासकीय निवास में बेड पर पड़ा मिला सुबह करीब 10:00 बजे तक दरवाजा न खुलने पर पशु चिकित्सा में पदस्थ चपरासी ने जाकर देखा तो चौंकाने वाला दृश्य सामने आया इस घटना की खबर कश्मीर में आपकी तरह फैल गई जानकारी मिलती है शाहनगर पुलिस मौके पर पहुंची.",
+            "top_headline": "Breaking News",
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892f13da26ec.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_with_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/689302d3d3ca0.mp4",
+            "frame_url": "https://api.mojonetwork.in/assets/video-player/default_frame.png",
+            "text": "तो ये थीं आज की पन्ना और आसपास की अहम ख़बरें। देखते रहिए पन्ना न्यूज़ सच्ची और असरदार पत्रकारिता का आपका अपना भरोसेमंद साथी। मैं हूँ विनीत रिंगे, मिलते हैं अगली बुलेटिन में नई ख़बरों और अपडेट्स के साथ। नमस्कार.",
+            "top_headline": "Breaking News",
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892f13da26ec.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "video_without_text",
+            "media_url": "https://api.mojonetwork.in/upload/bulletin_videos/6892eea2c2029.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          }
+        ]
+      }
+    ]
+  },
+  "response": {
+    "status": false,
+    "message": "Generated 0/1 bulletins successfully",
+    "session_id": "20250812_004737_d0b4d6f7",
+    "data": [
+      {
+        "id": "bulletin_001",
+        "session_id": "20250812_004737_d0b4d6f7_bulletin_001",
+        "status": "failed",
+        "error": "[Errno 32] Broken pipe\n\nMoviePy error: FFMPEG encountered the following error while writing file /Users/anumanmodi/breaking_news_bulletin/uploads/video-bulletin/bulletin_bulletin_001_20250812_004737_d0b4d6f7_bulletin_001.mp4:\n\n b'[rawvideo @ 0x13be079e0] Invalid buffer size, packet size 65536 < expected frame_size 6220800\\n[vist#0:0/rawvideo @ 0x13be04290] [dec:rawvideo @ 0x13be07340] Error submitting packet to decoder: Invalid argument\\n[in#0/rawvideo @ 0x13bd043a0] Error during demuxing: Immediate exit requested\\n[vost#0:0/libx264 @ 0x13be053a0] Error submitting a packet to the muxer: Immediate exit requested\\n    Last message repeated 1 times\\n[out#0/mp4 @ 0x13be045b0] Error muxing a packet\\n[out#0/mp4 @ 0x13be045b0] Task finished with error code: -1414092869 (Immediate exit requested)\\n[out#0/mp4 @ 0x13be045b0] Terminating thread with return code -1414092869 (Immediate exit requested)\\n[out#0/mp4 @ 0x13be045b0] Error writing trailer: Immediate exit requested\\n[out#0/mp4 @ 0x13be045b0] Error closing file: Immediate exit requested\\n'",
+        "generated_at": "2025-08-12T00:49:40.627632"
+      }
+    ]
+  }
+}

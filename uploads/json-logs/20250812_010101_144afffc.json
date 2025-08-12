@@ -1,0 +1,68 @@
+{
+  "session_id": "20250812_010101_144afffc",
+  "timestamp": "2025-08-12T01:05:35.095875",
+  "request": {
+    "data": [
+      {
+        "id": "bulletin_001",
+        "logo_url": "https://api.mojonetwork.in/upload/website_images/6888707ee008a.png",
+        "language_code": "hi-IN",
+        "language_name": "Hindi",
+        "ticker": "ब्रेकिंग न्यूज़: पन्ना में वन विभाग की दादागिरी • किसानों पर केस दर्ज करने की धमकी • किसान संगठनों ने किया विरोध • मुख्यमंत्री ने दिए जांच के आदेश • मौसम विभाग ने जताई भारी बारिश की संभावना • शेयर बाजार में गिरावट दर्ज",
+        "background_url": "https://api.mojonetwork.in/assets/video-player/earth_bg.mp4",
+        "story_thumbnail": null,
+        "generated_story_url": null,
+        "content": [
+          {
+            "segment_type": "intro",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/intro.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          },
+          {
+            "segment_type": "main_news",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/sample_video.mp4",
+            "frame_url": "https://api.mojonetwork.in/upload/video_frames/bulletin_frame_2.png",
+            "text": "नमस्कार दर्शकों, आज की मुख्य खबर में, पन्ना जिले में वन विभाग की कथित दादागिरी से किसानों में रोष व्याप्त है। स्थानीय किसानों का आरोप है कि वन विभाग के अधिकारी राजस्व भूमि पर खेती करने वाले किसानों को परेशान कर रहे हैं और उन पर झूठे केस दर्ज करने की धमकी दे रहे हैं।",
+            "top_headline": "मुख्य समाचार",
+            "bottom_headline": "वन विभाग की दादागिरी • किसानों पर केस दर्ज करने की धमकी",
+            "duration": null
+          },
+          {
+            "segment_type": "outro",
+            "media_url": "https://mojo-video.wpsenders.in/uploads/sample_video/intro.mp4",
+            "frame_url": null,
+            "text": null,
+            "top_headline": null,
+            "bottom_headline": null,
+            "duration": null
+          }
+        ]
+      }
+    ]
+  },
+  "response": {
+    "status": true,
+    "message": "Generated 1/1 bulletins successfully",
+    "session_id": "20250812_010101_144afffc",
+    "data": [
+      {
+        "id": "bulletin_001",
+        "session_id": "20250812_010101_144afffc_bulletin_001",
+        "status": "completed",
+        "video_url": "/video-bulletin/bulletin_bulletin_001_20250812_010101_144afffc_bulletin_001.mp4",
+        "thumbnail_url": "/thumbnails/thumb_bulletin_001_20250812_010101_144afffc_bulletin_001.jpg",
+        "video_path": "/Users/anumanmodi/breaking_news_bulletin/uploads/video-bulletin/bulletin_bulletin_001_20250812_010101_144afffc_bulletin_001.mp4",
+        "thumbnail_path": "/Users/anumanmodi/breaking_news_bulletin/uploads/thumbnails/thumb_bulletin_001_20250812_010101_144afffc_bulletin_001.jpg",
+        "duration": 34.3,
+        "resolution": "1920x1080",
+        "file_size_mb": 20.37,
+        "segments_processed": 3,
+        "generated_at": "2025-08-12T01:05:35.094704"
+      }
+    ]
+  }
+}

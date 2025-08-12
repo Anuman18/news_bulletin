@@ -1,3 +1,10 @@
+"""
+News Bulletin Generator API v13.0 - OPTIMIZED WITH DYNAMIC VOICE SUPPORT
+High-performance video bulletin generator with dynamic Google TTS voice selection
+Author: Performance Enhanced Version with Dynamic Voice Support
+Date: 2024
+"""
+
 import os
 import shutil
 import asyncio
@@ -10,13 +17,24 @@ from io import BytesIO
 import math
 import logging
 import time
+import json
+import warnings
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import threading
+import functools
+import tempfile
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
+# Suppress MoviePy warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="moviepy")
+os.environ['IMAGEIO_FFMPEG_EXE'] = 'ffmpeg'  # Use system ffmpeg for better performance
+
+# Import required libraries
 try:
     import cv2
     import numpy as np
@@ -29,24 +47,165 @@ try:
         vfx, VideoClip, CompositeAudioClip
     )
     from gtts import gTTS
+    # Performance enhancement imports
+    from functools import lru_cache
+    import aiofiles
+    import httpx
 except ImportError as e:
     print(f"Missing dependency: {e}")
-    print("Install: pip install fastapi uvicorn opencv-python-headless pillow numpy moviepy requests gtts")
+    print("Install: pip install fastapi uvicorn opencv-python-headless pillow numpy moviepy requests gtts aiofiles httpx")
     raise SystemExit(1)
 
-# --------------------------------------------------------------------------------------
-# Logging
-# --------------------------------------------------------------------------------------
+# ==============================================================================
+# DYNAMIC VOICE CONFIGURATION
+# ==============================================================================
+
+def extract_language_from_voice(voice_name: str) -> str:
+    """
+    Extract language code from any Google TTS voice name
+    Supports any format like: hi-IN-Wavenet-D, en-US-Standard-A, etc.
+    """
+    if not voice_name:
+        return "hi"
+    
+    try:
+        # Handle formats like "hi-IN-Wavenet-D", "en-US-Standard-A"
+        parts = voice_name.split("-")
+        if len(parts) >= 2:
+            lang_code = parts[0].lower()
+            return lang_code
+        
+        # Handle simple formats like "hi", "en"
+        if len(voice_name) <= 3:
+            return voice_name.lower()
+        
+        # Fallback: try to extract first 2 characters
+        return voice_name[:2].lower()
+    except:
+        return "hi"
+
+def normalize_voice_to_gtts(voice_name: str) -> str:
+    """
+    Convert any Google Cloud TTS voice name to gTTS compatible language code
+    This function works with ANY voice name without predefined mapping
+    """
+    if not voice_name:
+        return "hi"
+    
+    lang_code = extract_language_from_voice(voice_name)
+    
+    # Map to gTTS supported languages
+    gtts_mapping = {
+        "hi": "hi",  # Hindi
+        "en": "en",  # English
+        "bn": "bn",  # Bengali
+        "ta": "ta",  # Tamil
+        "te": "te",  # Telugu
+        "mr": "mr",  # Marathi
+        "gu": "gu",  # Gujarati
+        "kn": "kn",  # Kannada
+        "ml": "ml",  # Malayalam
+        "pa": "pa",  # Punjabi
+        "ur": "ur",  # Urdu
+        "as": "as",  # Assamese
+        "or": "or",  # Odia
+        "sa": "sa",  # Sanskrit
+        "ne": "ne",  # Nepali
+        "si": "si",  # Sinhala
+        "my": "my",  # Myanmar
+        "th": "th",  # Thai
+        "vi": "vi",  # Vietnamese
+        "zh": "zh",  # Chinese
+        "ja": "ja",  # Japanese
+        "ko": "ko",  # Korean
+        "ar": "ar",  # Arabic
+        "fa": "fa",  # Persian
+        "tr": "tr",  # Turkish
+        "ru": "ru",  # Russian
+        "de": "de",  # German
+        "fr": "fr",  # French
+        "es": "es",  # Spanish
+        "it": "it",  # Italian
+        "pt": "pt",  # Portuguese
+        "nl": "nl",  # Dutch
+        "sv": "sv",  # Swedish
+        "da": "da",  # Danish
+        "no": "no",  # Norwegian
+        "fi": "fi",  # Finnish
+        "pl": "pl",  # Polish
+        "cs": "cs",  # Czech
+        "sk": "sk",  # Slovak
+        "hu": "hu",  # Hungarian
+        "ro": "ro",  # Romanian
+        "bg": "bg",  # Bulgarian
+        "hr": "hr",  # Croatian
+        "sr": "sr",  # Serbian
+        "sl": "sl",  # Slovenian
+        "et": "et",  # Estonian
+        "lv": "lv",  # Latvian
+        "lt": "lt",  # Lithuanian
+        "uk": "uk",  # Ukrainian
+        "el": "el",  # Greek
+        "he": "he",  # Hebrew
+        "af": "af",  # Afrikaans
+        "sw": "sw",  # Swahili
+        "id": "id",  # Indonesian
+        "ms": "ms",  # Malay
+        "tl": "tl",  # Filipino
+    }
+    
+    return gtts_mapping.get(lang_code, "hi")
+
+# ==============================================================================
+# PERFORMANCE CONFIGURATION
+# ==============================================================================
+
+# Logging Configuration - Optimized but still informative
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    format="%(asctime)s - [%(threadName)s] - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger("bulletin")
 
-# --------------------------------------------------------------------------------------
-# FastAPI app
-# --------------------------------------------------------------------------------------
-app = FastAPI(title="News Bulletin Generator API", version="9.0.2")
+# Video Configuration
+VIDEO_WIDTH = 1920
+VIDEO_HEIGHT = 1080
+CONTENT_X = 40
+CONTENT_Y = 40
+CONTENT_WIDTH = 1840
+CONTENT_HEIGHT = 900
+TICKER_HEIGHT = 120
+TICKER_Y = VIDEO_HEIGHT - TICKER_HEIGHT
+LOGO_SIZE = 150
+LOGO_X = VIDEO_WIDTH - LOGO_SIZE - 80
+LOGO_Y = 30
+TEXT_OVERLAY_X = 60
+TEXT_OVERLAY_Y = 40
+
+# Performance Settings
+MAX_WORKERS = 8  # Increased from 4
+PROCESS_WORKERS = 4  # For CPU-intensive tasks
+RENDER_FPS = 24  # Keep original quality
+RENDER_PRESET = "fast"  # Balance between speed and quality (was "medium")
+RENDER_CRF = "22"  # Slightly higher CRF for faster encoding (was 20)
+DOWNLOAD_TIMEOUT = 20  # Reduced from 30
+CHUNK_SIZE = 32768  # Increased from 8192
+
+# Cache settings
+CACHE_SIZE = 128
+REQUEST_CACHE = {}
+FONT_CACHE = {}
+
+# ==============================================================================
+# FASTAPI APPLICATION
+# ==============================================================================
+
+app = FastAPI(
+    title="News Bulletin Generator API - Optimized with Dynamic Voice",
+    version="13.0.0",
+    description="High-performance video bulletin generator with dynamic voice support"
+)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -55,1009 +214,1230 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --------------------------------------------------------------------------------------
-# Directories
-# --------------------------------------------------------------------------------------
+# Thread pools for concurrent processing
+executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+process_executor = ProcessPoolExecutor(max_workers=PROCESS_WORKERS)
+
+# Async HTTP client for faster downloads
+http_client = httpx.AsyncClient(timeout=DOWNLOAD_TIMEOUT)
+
+# ==============================================================================
+# DIRECTORY STRUCTURE
+# ==============================================================================
+
 BASE_DIR = Path(__file__).parent
-THUMBNAILS_DIR = BASE_DIR / "thumbnails"
-VIDEO_BULLETIN_DIR = BASE_DIR / "video-bulletin"
-TEMP_DIR = BASE_DIR / "temp"
+UPLOADS_DIR = BASE_DIR / "uploads"
+VIDEO_BULLETIN_DIR = UPLOADS_DIR / "video-bulletin"
+THUMBNAILS_DIR = UPLOADS_DIR / "thumbnails"
+TEMP_BASE_DIR = UPLOADS_DIR / "temp"
 FONTS_DIR = BASE_DIR / "fonts"
-AUDIO_DIR = BASE_DIR / "audio"
+JSON_LOGS_DIR = UPLOADS_DIR / "json-logs"
 
-for p in [THUMBNAILS_DIR, VIDEO_BULLETIN_DIR, TEMP_DIR, FONTS_DIR, AUDIO_DIR]:
-    p.mkdir(parents=True, exist_ok=True)
+# Create all required directories
+for directory in [UPLOADS_DIR, VIDEO_BULLETIN_DIR, THUMBNAILS_DIR, TEMP_BASE_DIR, FONTS_DIR, JSON_LOGS_DIR]:
+    directory.mkdir(parents=True, exist_ok=True)
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"
+# ==============================================================================
+# DATA MODELS
+# ==============================================================================
 
-# --------------------------------------------------------------------------------------
-# Layout constants
-# --------------------------------------------------------------------------------------
-VIDEO_WIDTH = 1920
-VIDEO_HEIGHT = 1080
-
-CONTENT_X = 40
-CONTENT_Y = 40
-CONTENT_WIDTH = 1840
-CONTENT_HEIGHT = 900
-
-TICKER_HEIGHT = 120
-TICKER_Y = VIDEO_HEIGHT - TICKER_HEIGHT
-
-LOGO_SIZE = 150
-LOGO_X = VIDEO_WIDTH - LOGO_SIZE - 80
-LOGO_Y = 30
-
-# ADJUSTED: Move text overlay higher up so it fits within frame
-TEXT_OVERLAY_X = 60
-TEXT_OVERLAY_Y = 40  # Changed from 50 to 40 - moved up
-TEXT_OVERLAY_WIDTH = 800
-TEXT_OVERLAY_HEIGHT = 100
-
-# --------------------------------------------------------------------------------------
-# Fonts
-# --------------------------------------------------------------------------------------
-HINDI_FONT_URL = "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"
-HINDI_FONT_PATH = FONTS_DIR / "hindi-bold.ttf"
-BOLD_FONT_URL = "https://github.com/google/fonts/raw/main/apache/robotocondensed/RobotoCondensed-Bold.ttf"
-BOLD_FONT_PATH = FONTS_DIR / "roboto-bold.ttf"
-
-def _download_font_once(url: str, path: Path) -> None:
-    try:
-        if path.exists():
-            return
-        logger.info(f"Downloading font: {url}")
-        r = requests.get(url, timeout=30)
-        r.raise_for_status()
-        with open(path, "wb") as f:
-            f.write(r.content)
-        logger.info(f"Saved font to {path}")
-    except Exception as e:
-        logger.warning(f"Font download warning for {url}: {e}")
-
-def setup_fonts() -> None:
-    _download_font_once(HINDI_FONT_URL, HINDI_FONT_PATH)
-    _download_font_once(BOLD_FONT_URL, BOLD_FONT_PATH)
-
-setup_fonts()
-
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
-    try:
-        if HINDI_FONT_PATH.exists():
-            return ImageFont.truetype(str(HINDI_FONT_PATH), size=size, encoding="utf-8")
-        if BOLD_FONT_PATH.exists():
-            return ImageFont.truetype(str(BOLD_FONT_PATH), size=size)
-    except Exception as e:
-        logger.warning(f"Loading truetype font failed: {e}")
-    return ImageFont.load_default()
-
-# --------------------------------------------------------------------------------------
-# Schemas
-# --------------------------------------------------------------------------------------
 class ContentSegment(BaseModel):
-    segment_type: str
+    """Model for video content segments"""
+    segment_type: str  # intro, main_news, outro
     media_url: Optional[str] = None
     frame_url: Optional[str] = None
     text: Optional[str] = None
     top_headline: Optional[str] = None
+    bottom_headline: Optional[str] = None
     duration: Optional[float] = None
 
 class BulletinData(BaseModel):
-    id: str
+    """Model for bulletin data"""
     logo_url: str
     language_code: str = "hi-IN"
-    language_name: str = "Hindi"
+    language_name: str = "Hindi"  # This can be any Google TTS voice name
     ticker: str
     background_url: str
     story_thumbnail: Optional[str] = None
     generated_story_url: Optional[str] = None
     content: List[ContentSegment]
 
-class BulletinRequest(BaseModel):
-    data: List[BulletinData]
+# ==============================================================================
+# SESSION MANAGEMENT
+# ==============================================================================
 
-class BulletinResponse(BaseModel):
-    status: bool
-    message: str
-    data: List[Dict[str, Any]]
+class SessionManager:
+    """Manages unique sessions for concurrent processing"""
+    
+    @staticmethod
+    def create_session_id() -> str:
+        """Create unique session ID"""
+        return f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    
+    @staticmethod
+    def create_session_dirs(session_id: str) -> Dict[str, Path]:
+        """Create session-specific directories"""
+        session_temp = TEMP_BASE_DIR / session_id
+        session_audio = session_temp / "audio"
+        session_downloads = session_temp / "downloads"
+        
+        for dir_path in [session_temp, session_audio, session_downloads]:
+            dir_path.mkdir(parents=True, exist_ok=True)
+        
+        return {
+            "temp": session_temp,
+            "audio": session_audio,
+            "downloads": session_downloads
+        }
+    
+    @staticmethod
+    async def cleanup_session_async(session_id: str):
+        """Async cleanup session-specific directories"""
+        session_temp = TEMP_BASE_DIR / session_id
+        if session_temp.exists():
+            try:
+                await asyncio.get_event_loop().run_in_executor(
+                    executor, shutil.rmtree, session_temp
+                )
+                logger.info(f"✅ Cleaned up session: {session_id}")
+            except Exception as e:
+                logger.error(f"❌ Failed to cleanup session {session_id}: {e}")
 
-# --------------------------------------------------------------------------------------
-# Utilities
-# --------------------------------------------------------------------------------------
-def _normalize_gtts_lang(code: str) -> str:
-    """
-    gTTS supported languages are mostly 2-letter (e.g., 'hi', 'en').
-    Normalize 'hi-IN' -> 'hi', 'en-US' -> 'en', etc.
-    """
-    if not code:
-        return "hi"
-    lc = code.lower().replace("_", "-")
-    if lc.startswith("hi"):
-        return "hi"
-    if "-" in lc:
-        return lc.split("-")[0]
-    return lc
+# ==============================================================================
+# FONT MANAGEMENT
+# ==============================================================================
 
-def _safe_unlink(path: Path) -> None:
-    try:
-        if path.exists():
-            path.unlink()
-    except:
-        pass
+HINDI_FONT_URL = "https://github.com/google/fonts/raw/main/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf"
+HINDI_FONT_PATH = FONTS_DIR / "hindi-bold.ttf"
+BOLD_FONT_URL = "https://github.com/google/fonts/raw/main/apache/robotocondensed/RobotoCondensed-Bold.ttf"
+BOLD_FONT_PATH = FONTS_DIR / "roboto-bold.ttf"
 
-def _requests_get(url: str, **kwargs):
-    """
-    Simple retry wrapper for GET requests.
-    """
-    last_err = None
-    for _ in range(2):
+async def setup_fonts_async():
+    """Async font setup"""
+    async def download_font(url: str, path: Path):
         try:
-            return requests.get(url, **kwargs)
+            if path.exists():
+                return
+            logger.info(f"📥 Downloading font: {url}")
+            response = await http_client.get(url)
+            response.raise_for_status()
+            async with aiofiles.open(path, "wb") as f:
+                await f.write(response.content)
+            logger.info(f"✅ Font saved: {path.name}")
         except Exception as e:
-            last_err = e
-            time.sleep(0.3)
-    if last_err:
-        raise last_err
+            logger.warning(f"⚠️ Font download failed: {e}")
+    
+    await download_font(HINDI_FONT_URL, HINDI_FONT_PATH)
+    await download_font(BOLD_FONT_URL, BOLD_FONT_PATH)
 
-def download_file(url: str, destination: Path = TEMP_DIR) -> Optional[Path]:
-    """
-    Download file (video/image/base64-data) to TEMP_DIR.
-    Returns local Path or None on failure.
-    """
+@lru_cache(maxsize=32)
+def load_font(size: int) -> ImageFont.FreeTypeFont:
+    """Load font with caching"""
+    try:
+        if HINDI_FONT_PATH.exists():
+            return ImageFont.truetype(str(HINDI_FONT_PATH), size=size, encoding="utf-8")
+        if BOLD_FONT_PATH.exists():
+            return ImageFont.truetype(str(BOLD_FONT_PATH), size=size)
+    except Exception as e:
+        logger.warning(f"Font loading error: {e}")
+    return ImageFont.load_default()
+
+# ==============================================================================
+# UTILITY FUNCTIONS - OPTIMIZED
+# ==============================================================================
+
+async def save_request_response_async(session_id: str, request_data: dict, response_data: dict):
+    """Async save request and response data to JSON file"""
+    try:
+        log_data = {
+            "session_id": session_id,
+            "timestamp": datetime.now().isoformat(),
+            "request": request_data,
+            "response": response_data
+        }
+        
+        log_file = JSON_LOGS_DIR / f"{session_id}.json"
+        async with aiofiles.open(log_file, 'w', encoding='utf-8') as f:
+            await f.write(json.dumps(log_data, indent=2, ensure_ascii=False))
+        
+        logger.info(f"📝 Saved log: {log_file.name}")
+    except Exception as e:
+        logger.error(f"Failed to save log: {e}")
+
+async def download_file_async(url: str, destination: Path, session_id: str) -> Optional[Path]:
+    """Async file download with caching"""
     try:
         if not url:
-            logger.warning("No URL provided for download")
             return None
-
-        # Base64 data URL
+        
+        # Check cache first
+        cache_key = f"{url}_{session_id}"
+        if cache_key in REQUEST_CACHE:
+            return REQUEST_CACHE[cache_key]
+        
+        # Handle base64 data URLs
         if url.startswith("data:"):
             header, data = url.split(",", 1)
             file_data = base64.b64decode(data)
             ext = ".png" if "png" in header else ".jpg"
-            file_path = destination / f"{uuid.uuid4()}{ext}"
-            with open(file_path, "wb") as f:
-                f.write(file_data)
+            file_path = destination / f"{session_id}_{uuid.uuid4().hex[:8]}{ext}"
+            
+            async with aiofiles.open(file_path, "wb") as f:
+                await f.write(file_data)
+            
+            REQUEST_CACHE[cache_key] = file_path
+            return file_path if file_path.exists() else None
+        
+        # Download from URL with streaming
+        async with http_client.stream("GET", url) as response:
+            response.raise_for_status()
+            
+            # Determine file extension
+            content_type = response.headers.get("content-type", "")
+            if "video" in content_type:
+                ext = ".mp4"
+            elif "png" in content_type:
+                ext = ".png"
+            elif "jpeg" in content_type or "jpg" in content_type:
+                ext = ".jpg"
+            else:
+                ext = Path(url.split("?")[0]).suffix or ".mp4"
+            
+            file_path = destination / f"{session_id}_{uuid.uuid4().hex[:8]}{ext}"
+            
+            async with aiofiles.open(file_path, "wb") as f:
+                async for chunk in response.aiter_bytes(chunk_size=CHUNK_SIZE):
+                    await f.write(chunk)
+            
             if file_path.exists() and file_path.stat().st_size > 0:
-                logger.info(f"Downloaded base64 to {file_path}")
+                logger.info(f"[{session_id}] ✅ Downloaded: {file_path.name}")
+                REQUEST_CACHE[cache_key] = file_path
                 return file_path
-            logger.error("Base64 file empty")
-            return None
-
-        r = _requests_get(url, stream=True, timeout=30)
-        r.raise_for_status()
-        content_type = r.headers.get("content-type", "")
-
-        if "video" in content_type:
-            ext = ".mp4"
-        elif "png" in content_type:
-            ext = ".png"
-        elif "jpeg" in content_type or "jpg" in content_type:
-            ext = ".jpg"
-        else:
-            # fallback by URL suffix
-            ext = Path(url.split("?")[0]).suffix or ".mp4"
-
-        file_path = destination / f"{uuid.uuid4()}{ext}"
-        with open(file_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-
-        if file_path.exists() and file_path.stat().st_size > 0:
-            logger.info(f"Downloaded: {file_path.name} ({file_path.stat().st_size/1024:.0f} KB)")
-            return file_path
-
-        logger.error(f"Empty download: {url}")
+        
         return None
     except Exception as e:
-        logger.error(f"Download failed for {url}: {e}")
+        logger.error(f"[{session_id}] Download failed: {e}")
         return None
 
-def _make_silence(duration: float, fps: int = 44100, nch: int = 2) -> AudioArrayClip:
+def get_video_duration_fast(video_path: Path, session_id: str) -> float:
+    """Get video duration with caching"""
+    try:
+        # Use cv2 for faster duration detection
+        cap = cv2.VideoCapture(str(video_path))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        cap.release()
+        
+        if fps > 0 and frame_count > 0:
+            duration = frame_count / fps
+            return round(duration, 2)
+        
+        # Fallback to moviepy
+        clip = VideoFileClip(str(video_path))
+        duration = clip.duration
+        clip.close()
+        
+        if duration is None or duration <= 0:
+            logger.warning(f"[{session_id}] Invalid duration, using default 10s")
+            return 10.0
+        
+        return round(duration, 2)
+    except Exception as e:
+        logger.error(f"[{session_id}] Duration error: {e}")
+        return 10.0
+
+def create_silence_audio(duration: float, fps: int = 44100) -> AudioArrayClip:
+    """Create silence audio clip"""
     if duration <= 0:
         duration = 0.05
     nframes = int(round(duration * fps))
     if nframes < 1:
         nframes = 1
-    silent_arr = np.zeros((nframes, nch), dtype=np.float32)
-    return AudioArrayClip(silent_arr, fps=fps)
+    silent_array = np.zeros((nframes, 2), dtype=np.float32)
+    return AudioArrayClip(silent_array, fps=fps)
 
-def _make_gtts_audio(text: str, lang_code: str, target_duration: float) -> Optional[AudioFileClip]:
+async def create_tts_audio_async(text: str, voice_name: str, duration: float, 
+                                 audio_dir: Path, session_id: str) -> Optional[AudioFileClip]:
     """
-    Create TTS audio with proper duration handling
+    Async TTS audio generation with dynamic voice support
+    Accepts any Google TTS voice name and converts to gTTS compatible format
     """
     if not text or not text.strip():
-        logger.warning("No text provided for TTS")
         return None
     
     try:
-        lang = _normalize_gtts_lang(lang_code)
-        audio_path = AUDIO_DIR / f"audio_{uuid.uuid4()}.mp3"
+        # Convert any voice name to gTTS compatible language
+        lang = normalize_voice_to_gtts(voice_name)
+        logger.info(f"[{session_id}] Using voice '{voice_name}' -> gTTS lang '{lang}'")
         
-        logger.info(f"Creating TTS audio: lang={lang}, text_length={len(text)}")
+        audio_path = audio_dir / f"{session_id}_tts_{uuid.uuid4().hex[:8]}.mp3"
         
-        # Try to create TTS with retry
-        last_err = None
-        for attempt in range(3):
-            try:
-                tts = gTTS(text=text, lang=lang, slow=False)
-                tts.save(str(audio_path))
-                if audio_path.exists() and audio_path.stat().st_size > 0:
-                    logger.info(f"TTS file created: {audio_path.name} ({audio_path.stat().st_size} bytes)")
-                    break
-            except Exception as e:
-                last_err = e
-                logger.warning(f"TTS attempt {attempt+1} failed: {e}")
-                time.sleep(0.5)
+        # Generate TTS in executor to avoid blocking
+        loop = asyncio.get_event_loop()
+        tts = await loop.run_in_executor(
+            executor,
+            lambda: gTTS(text=text, lang=lang, slow=False)
+        )
+        
+        # Save TTS
+        await loop.run_in_executor(
+            executor,
+            tts.save,
+            str(audio_path)
+        )
         
         if not audio_path.exists() or audio_path.stat().st_size == 0:
-            logger.error(f"TTS file creation failed: {last_err}")
             return None
         
-        # Load the TTS audio
+        # Load and adjust duration
         tts_clip = AudioFileClip(str(audio_path))
-        logger.info(f"TTS audio loaded: duration={tts_clip.duration:.2f}s")
         
-        # Speed adjustment if needed
-        if tts_clip.duration > target_duration * 1.2 and tts_clip.duration > 0:
-            speed_factor = tts_clip.duration / target_duration
-            logger.info(f"Speeding up audio by {speed_factor:.2f}x to fit duration")
-            tts_clip = tts_clip.fx(vfx.speedx, speed_factor)
-        
-        # Create a base silence track with target duration
-        final_duration = max(target_duration, tts_clip.duration) + 0.1
-        silence = _make_silence(final_duration, fps=44100, nch=2)
-        
-        # Composite the TTS on top of silence
+        # Create silence for full duration and composite TTS on it
+        silence = create_silence_audio(duration)
         final_audio = CompositeAudioClip([silence, tts_clip.set_start(0)])
-        final_audio = final_audio.set_duration(final_duration)
+        final_audio = final_audio.set_duration(duration)
         
-        logger.info(f"Final TTS audio: duration={final_audio.duration:.2f}s")
         return final_audio
         
     except Exception as e:
-        logger.error(f"TTS audio creation error: {e}", exc_info=True)
+        logger.error(f"[{session_id}] TTS error: {e}")
         return None
 
-def check_video_has_audio(video_path: Path) -> bool:
-    try:
-        v = VideoFileClip(str(video_path))
-        has_audio = v.audio is not None
-        if has_audio:
-            try:
-                arr = v.audio.to_soundarray(fps=22050)
-                has_audio = np.any(np.abs(arr) > 1e-4)
-            except Exception:
-                pass
-        v.close()
-        return has_audio
-    except Exception as e:
-        logger.error(f"check_video_has_audio error: {e}")
-        return False
+# ==============================================================================
+# VISUAL OVERLAY FUNCTIONS - OPTIMIZED BUT COMPLETE
+# ==============================================================================
 
-# --------------------------------------------------------------------------------------
-# Visual layers
-# --------------------------------------------------------------------------------------
 def create_logo_overlay(duration: float, logo_path: Optional[Path]) -> ImageClip:
-    """
-    Render a circular logo with a subtle white plate behind.
-    """
+    """Create logo overlay with circular background - optimized"""
     try:
         overlay = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
-
-        # circular plate
+        
+        # Draw circular background
         plate_size = LOGO_SIZE + 20
-        draw.ellipse([LOGO_X - 10, LOGO_Y - 10,
-                      LOGO_X + plate_size - 10, LOGO_Y + plate_size - 10],
-                     fill=(255, 255, 255, 230),
-                     outline=(220, 20, 60, 255), width=3)
-
+        draw.ellipse(
+            [LOGO_X - 10, LOGO_Y - 10, LOGO_X + plate_size - 10, LOGO_Y + plate_size - 10],
+            fill=(255, 255, 255, 230),
+            outline=(220, 20, 60, 255),
+            width=3
+        )
+        
+        # Add logo if available
         if logo_path and logo_path.exists():
             try:
                 logo = Image.open(logo_path).convert("RGBA")
-                ratio = min(LOGO_SIZE / logo.width, LOGO_SIZE / logo.height)
-                new_w = int(logo.width * ratio * 0.9)
-                new_h = int(logo.height * ratio * 0.9)
-                logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
-                lx = LOGO_X + (LOGO_SIZE - new_w) // 2
-                ly = LOGO_Y + (LOGO_SIZE - new_h) // 2
-                overlay.paste(logo, (lx, ly), logo)
+                ratio = min(LOGO_SIZE / logo.width, LOGO_SIZE / logo.height) * 0.9
+                new_size = (int(logo.width * ratio), int(logo.height * ratio))
+                logo = logo.resize(new_size, Image.Resampling.BILINEAR)  # Faster than LANCZOS
+                
+                logo_x = LOGO_X + (LOGO_SIZE - new_size[0]) // 2
+                logo_y = LOGO_Y + (LOGO_SIZE - new_size[1]) // 2
+                overlay.paste(logo, (logo_x, logo_y), logo)
             except Exception as e:
-                logger.error(f"Logo overlay error: {e}")
-
+                logger.error(f"Logo processing error: {e}")
+        
         return ImageClip(np.array(overlay), transparent=True, duration=duration)
     except Exception as e:
-        logger.error(f"create_logo_overlay error: {e}")
-        return ImageClip(np.zeros((VIDEO_HEIGHT, VIDEO_WIDTH, 4), dtype=np.uint8),
-                         transparent=True, duration=duration)
+        logger.error(f"Logo overlay error: {e}")
+        return ImageClip(np.zeros((VIDEO_HEIGHT, VIDEO_WIDTH, 4), dtype=np.uint8), transparent=True, duration=duration)
 
 def create_frame_border(frame_path: Optional[Path], duration: float) -> ImageClip:
-    """
-    If frame image provided, stretch to full screen; else draw a simple border around content area.
-    """
+    """Create decorative frame border - optimized"""
     try:
         if frame_path and frame_path.exists():
             img = Image.open(frame_path).convert("RGBA")
-            img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.LANCZOS)
+            img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.BILINEAR)
         else:
             img = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
             draw = ImageDraw.Draw(img)
-            draw.rectangle([CONTENT_X - 10, CONTENT_Y - 10,
-                            CONTENT_X + CONTENT_WIDTH + 10, CONTENT_Y + CONTENT_HEIGHT + 10],
-                           outline=(255, 215, 0, 255), width=10)
-            draw.rectangle([CONTENT_X - 5, CONTENT_Y - 5,
-                            CONTENT_X + CONTENT_WIDTH + 5, CONTENT_Y + CONTENT_HEIGHT + 5],
-                           outline=(255, 255, 255, 220), width=3)
+            
+            # Simplified borders for speed
+            draw.rectangle(
+                [CONTENT_X - 10, CONTENT_Y - 10, CONTENT_X + CONTENT_WIDTH + 10, CONTENT_Y + CONTENT_HEIGHT + 10],
+                outline=(255, 215, 0, 255),
+                width=8
+            )
+            
+            draw.rectangle(
+                [CONTENT_X - 5, CONTENT_Y - 5, CONTENT_X + CONTENT_WIDTH + 5, CONTENT_Y + CONTENT_HEIGHT + 5],
+                outline=(255, 255, 255, 220),
+                width=2
+            )
+        
         return ImageClip(np.array(img), transparent=True, duration=duration)
     except Exception as e:
-        logger.error(f"create_frame_border error: {e}")
-        return ImageClip(np.zeros((VIDEO_HEIGHT, VIDEO_WIDTH, 4), dtype=np.uint8),
-                         transparent=True, duration=duration)
+        logger.error(f"Frame border error: {e}")
+        return ImageClip(np.zeros((VIDEO_HEIGHT, VIDEO_WIDTH, 4), dtype=np.uint8), transparent=True, duration=duration)
 
-def _render_text_with_outline(draw: ImageDraw.ImageDraw, xy: Tuple[int, int], text: str, font: ImageFont.FreeTypeFont,
-                              fill=(255, 255, 255, 255)) -> None:
-    x, y = xy
-    # black outline
-    for ox, oy in [(-2,0),(2,0),(0,-2),(0,2),(-2,-2),(2,-2),(-2,2),(2,2)]:
-        draw.text((x+ox, y+oy), text, font=font, fill=(0, 0, 0, 255))
-    draw.text((x, y), text, font=font, fill=fill)
-
-def create_text_overlay_pil(text: str, duration: float) -> Optional[ImageClip]:
-    """
-    Pure PIL text overlay - BIGGER text size to cover more frame area
-    """
+def create_text_overlay(text: str, duration: float) -> Optional[ImageClip]:
+    """Create top headline text overlay - optimized"""
     try:
         if not text or not text.strip():
             return None
+        
         canvas = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
         draw = ImageDraw.Draw(canvas)
-        # INCREASED font size from 50 to 80 for bigger headline
-        font = _load_font(80)
+        font = load_font(80)
         
-        # Position at top left, slightly adjusted for bigger text
-        _render_text_with_outline(draw, (TEXT_OVERLAY_X, TEXT_OVERLAY_Y), text, font)
+        # Simplified outline for speed
+        x, y = TEXT_OVERLAY_X, TEXT_OVERLAY_Y
+        for ox, oy in [(-2,0), (2,0), (0,-2), (0,2)]:
+            draw.text((x + ox, y + oy), text, font=font, fill=(0, 0, 0, 255))
+        draw.text((x, y), text, font=font, fill=(255, 255, 255, 255))
         
         return ImageClip(np.array(canvas), transparent=True, duration=duration)
     except Exception as e:
-        logger.error(f"create_text_overlay_pil error: {e}")
+        logger.error(f"Text overlay error: {e}")
         return None
 
-def _measure_text(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> Tuple[int, int]:
-    bbox = draw.textbbox((0, 0), text, font=font)
-    w = bbox[2] - bbox[0]
-    h = bbox[3] - bbox[1]
-    return w, h
-
-def create_scrolling_ticker_pil(ticker_text: str, duration: float, speed_px_per_s: int = 150) -> VideoClip:
-    """
-    Build a PIL-based scrolling ticker with improved Breaking News badge
-    """
-    # build base bar
-    bar_w, bar_h = VIDEO_WIDTH, TICKER_HEIGHT
-    font = _load_font(56)
-
-    text_for_strip = f"  ●  {ticker_text}  ●  {ticker_text}  ●  {ticker_text}  ●  "
-    # Pre-render text strip to a long image
-    dummy = Image.new("RGB", (10, 10), (0, 0, 0))
-    d = ImageDraw.Draw(dummy)
-    text_w, text_h = _measure_text(d, text_for_strip, font)
-    strip_w = max(text_w + VIDEO_WIDTH, VIDEO_WIDTH * 2)
-    strip_h = max(text_h + 10, bar_h - 20)
-
-    strip_img = Image.new("RGBA", (strip_w, strip_h), (0, 0, 0, 0))
-    sd = ImageDraw.Draw(strip_img)
-    _render_text_with_outline(sd, (0, (strip_h - text_h)//2), text_for_strip, font)
-
-    strip_np = np.array(strip_img)
-    
-    # BIGGER Breaking News badge dimensions
-    badge_w, badge_h = 250, TICKER_HEIGHT - 10  # Made wider and full ticker height
-
-    def make_frame(t: float):
-        # base bar with darker red for better contrast
-        frame = Image.new("RGB", (bar_w, bar_h), (160, 20, 30))
-        
-        # gradient shine top (subtle)
-        g = ImageDraw.Draw(frame)
-        for i in range(bar_h // 3):
-            alpha = int(80 - i * 2)
-            if alpha < 0: alpha = 0
-            g.line([(0, i), (bar_w, i)], fill=(200, 40, 50))
-
-        # compute x based on time - START FROM badge width so text doesn't overlap initially
-        shift = int((t * speed_px_per_s) % (strip_w + bar_w))
-        x = badge_w + 20 - shift  # Start after badge with some padding
-        
-        # paste strip on frame (BEFORE badge so it goes behind)
-        frame_np = np.array(frame).astype(np.uint8)
-        
-        # handle partially visible region
-        y = (bar_h - strip_h) // 2
-        left = max(0, x)
-        right = min(bar_w, x + strip_w)
-        if right > left:
-            src_x1 = left - x
-            src_x2 = src_x1 + (right - left)
-            dst_x1 = left
-            dst_x2 = right
-            sub = strip_np[:, src_x1:src_x2, :]
-            # alpha composite
-            alpha = sub[:, :, 3:4] / 255.0
-            frame_np[y:y+strip_h, dst_x1:dst_x2, :] = (
-                (1 - alpha) * frame_np[y:y+strip_h, dst_x1:dst_x2, :] + alpha * sub[:, :, :3]
-            ).astype(np.uint8)
-
-        # IMPROVED Breaking News badge (drawn AFTER text so it covers it)
-        # Full height badge with better design
-        badge = Image.new("RGBA", (badge_w, badge_h), (0, 0, 0, 0))
-        bd = ImageDraw.Draw(badge)
-        
-        # Main badge background with gradient effect
-        bd.rectangle([0, 0, badge_w, badge_h], fill=(255, 255, 255, 255))
-        
-        # Red accent bars - top and bottom
-        bd.rectangle([0, 0, badge_w, 12], fill=(220, 20, 60))
-        bd.rectangle([0, badge_h-12, badge_w, badge_h], fill=(220, 20, 60))
-        
-        # Side accent
-        bd.rectangle([0, 0, 5, badge_h], fill=(220, 20, 60))
-        bd.rectangle([badge_w-5, 0, badge_w, badge_h], fill=(220, 20, 60))
-        
-        # Text with better positioning
-        f1 = _load_font(40)  # Bigger font for BREAKING
-        f2 = _load_font(32)  # Bigger font for NEWS
-        
-        # Center the text properly
-        breaking_text = "BREAKING"
-        news_text = "NEWS"
-        
-        # Calculate text positions for centering
-        b_bbox = bd.textbbox((0, 0), breaking_text, font=f1)
-        b_width = b_bbox[2] - b_bbox[0]
-        n_bbox = bd.textbbox((0, 0), news_text, font=f2)
-        n_width = n_bbox[2] - n_bbox[0]
-        
-        # Draw centered text
-        _render_text_with_outline(bd, ((badge_w - b_width)//2, 20), breaking_text, f1, (220, 20, 60, 255))
-        _render_text_with_outline(bd, ((badge_w - n_width)//2, 55), news_text, f2, (40, 40, 40, 255))
-        
-        badge_np = np.array(badge)
-
-        # paste badge at left corner (covering any text that might be there)
-        bx = 0  # Start from absolute left
-        by = 5  # Small margin from top
-        
-        # Direct paste for opaque badge (no alpha blending needed for full opacity areas)
-        frame_np[by:by+badge_h, bx:bx+badge_w, :] = badge_np[:, :, :3]
-
-        return frame_np
-
-    clip = VideoClip(make_frame, duration=duration)
-    # Place it at bottom
-    return clip.set_position((0, TICKER_Y)).set_duration(duration)
-
-# --------------------------------------------------------------------------------------
-# Segment processor
-# --------------------------------------------------------------------------------------
-def process_video_segment(
-    media_path: Optional[Path],
-    duration: float,
-    text: Optional[str] = None,
-    language_code: str = "hi",
-    loop: bool = True
-) -> Optional[VideoFileClip]:
-    """
-    Returns a clip sized to CONTENT rect and positioned accordingly.
-    FIXED: Better audio handling for TTS
-    """
+def create_bottom_headline(headline: str, duration: float) -> Optional[ImageClip]:
+    """Create bottom headline box - optimized"""
     try:
-        if media_path and media_path.exists():
-            suffix = str(media_path).lower()
-            if suffix.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
-                # Video branch
-                v = VideoFileClip(str(media_path))
-                if not v:
-                    logger.error("VideoClip creation failed")
-                    return None
-
-                has_audio = v.audio is not None
-                if has_audio:
-                    try:
-                        arr = v.audio.to_soundarray(fps=22050)
-                        has_audio = np.any(np.abs(arr) > 1e-4)
-                    except Exception:
-                        pass
-
-                # loop to match duration if needed
-                if loop and v.duration < duration and v.duration > 0:
-                    loops_needed = math.ceil(duration / v.duration)
-                    v = concatenate_videoclips([v] * loops_needed, method="compose")
-
-                v = v.subclip(0, duration)
-                v = v.resize((CONTENT_WIDTH, CONTENT_HEIGHT)).set_position((CONTENT_X, CONTENT_Y))
-
-                if not has_audio and text and text.strip():
-                    logger.info(f"  Video has no audio, adding TTS for: {text[:50]}...")
-                    audio = _make_gtts_audio(text, language_code, duration)
-                    if audio:
-                        v = v.set_audio(audio)
-                        logger.info("  ✓ TTS audio successfully added to video")
-                    else:
-                        logger.error("  ✗ TTS audio creation failed for video")
-                else:
-                    if has_audio:
-                        logger.info("  ✓ Preserving original video audio")
-                    else:
-                        logger.info("  Video has no audio and no text provided")
-                return v
-
-            else:
-                # Image branch
-                img = Image.open(media_path).convert("RGBA")
-                img = img.resize((CONTENT_WIDTH, CONTENT_HEIGHT), Image.Resampling.LANCZOS)
-                img_arr = np.array(img)
-                if img_arr.shape[2] == 4:
-                    # convert to RGB for ImageClip base
-                    img_arr = cv2.cvtColor(img_arr, cv2.COLOR_RGBA2RGB)
-                clip = ImageClip(img_arr, duration=duration).set_position((CONTENT_X, CONTENT_Y))
-                # gentle zoom
-                clip = clip.resize(lambda t: 1 + 0.02 * t)
-                
-                if text and text.strip():
-                    logger.info(f"  Image segment, adding TTS for: {text[:50]}...")
-                    audio = _make_gtts_audio(text, language_code, duration)
-                    if audio:
-                        clip = clip.set_audio(audio)
-                        logger.info("  ✓ TTS audio successfully added to image")
-                    else:
-                        logger.error("  ✗ TTS audio creation failed for image")
-                return clip
-
-        # Placeholder branch
-        logger.warning("No media provided; using placeholder")
-        placeholder = ColorClip(size=(CONTENT_WIDTH, CONTENT_HEIGHT), color=(40, 45, 55), duration=duration)
-        placeholder = placeholder.set_position((CONTENT_X, CONTENT_Y))
+        if not headline or not headline.strip():
+            return None
         
-        if text and text.strip():
-            logger.info(f"  Placeholder segment, adding TTS for: {text[:50]}...")
-            audio = _make_gtts_audio(text, language_code, duration)
-            if audio:
-                placeholder = placeholder.set_audio(audio)
-                logger.info("  ✓ TTS audio successfully added to placeholder")
-            else:
-                logger.error("  ✗ TTS audio creation failed for placeholder")
+        canvas = Image.new("RGBA", (VIDEO_WIDTH, VIDEO_HEIGHT), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(canvas)
         
-        return placeholder
+        # Box dimensions
+        box_height = 90
+        box_width = VIDEO_WIDTH - 300
+        box_x = (VIDEO_WIDTH - box_width) // 2
+        box_y = VIDEO_HEIGHT - TICKER_HEIGHT - box_height - 20
+        
+        # Draw simplified background box
+        draw.rectangle(
+            [box_x, box_y, box_x + box_width, box_y + box_height],
+            fill=(15, 15, 20, 250)
+        )
+        
+        # Simple borders
+        draw.rectangle(
+            [box_x - 2, box_y - 2, box_x + box_width + 2, box_y + box_height + 2],
+            outline=(255, 255, 255, 255),
+            width=3
+        )
+        
+        # Accent bars (simplified)
+        accent_height = 8
+        draw.rectangle([box_x, box_y, box_x + 200, box_y + accent_height], fill=(220, 20, 60, 255))
+        draw.rectangle([box_x + box_width - 200, box_y, box_x + box_width, box_y + accent_height], fill=(220, 20, 60, 255))
+        
+        # Add text
+        display_text = f" • {headline} • "
+        font = load_font(52)
+        
+        # Calculate text position
+        bbox = draw.textbbox((0, 0), display_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        
+        if text_width > box_width - 40:
+            font = load_font(44)
+            bbox = draw.textbbox((0, 0), display_text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+        
+        text_x = box_x + (box_width - text_width) // 2
+        text_y = box_y + accent_height + ((box_height - accent_height - text_height) // 2)
+        
+        # Draw text with simple outline
+        for ox, oy in [(-2,0), (2,0), (0,-2), (0,2)]:
+            draw.text((text_x + ox, text_y + oy), display_text, font=font, fill=(0, 0, 0, 255))
+        
+        draw.text((text_x, text_y), display_text, font=font, fill=(255, 255, 255, 255))
+        
+        # Add live indicator
+        indicator_font = load_font(24)
+        indicator_text = "● समाचार"
+        draw.text((box_x + 20, box_y + box_height - 35), indicator_text, font=indicator_font, fill=(255, 50, 50, 255))
+        
+        return ImageClip(np.array(canvas), transparent=True, duration=duration)
         
     except Exception as e:
-        logger.error(f"process_video_segment error: {e}", exc_info=True)
-        fallback = ColorClip(size=(CONTENT_WIDTH, CONTENT_HEIGHT), color=(40, 45, 55), duration=duration)
-        return fallback.set_position((CONTENT_X, CONTENT_Y))
+        logger.error(f"Bottom headline error: {e}")
+        return None
 
-# --------------------------------------------------------------------------------------
-# Core pipeline
-# --------------------------------------------------------------------------------------
-async def process_bulletin(bulletin_data: BulletinData) -> Dict[str, Any]:
-    temp_files: List[Path] = []
-    clips_to_close = []
+def create_ticker_optimized(ticker_text: str, duration: float, speed: int = 150) -> VideoClip:
+    """Create scrolling news ticker - optimized version"""
     try:
-        logger.info("\n" + "="*60)
-        logger.info(f"Processing bulletin: {bulletin_data.id}")
-        logger.info(f"Language: {bulletin_data.language_name} ({bulletin_data.language_code})")
-        logger.info(f"Ticker: {bulletin_data.ticker[:80]}...")
-        logger.info("="*60)
+        bar_width, bar_height = VIDEO_WIDTH, TICKER_HEIGHT
+        font = load_font(56)
+        
+        # Create text strip
+        text_strip = f"  ●  {ticker_text}  ●  {ticker_text}  ●  "
+        
+        # Pre-render text image
+        dummy_img = Image.new("RGB", (10, 10))
+        dummy_draw = ImageDraw.Draw(dummy_img)
+        bbox = dummy_draw.textbbox((0, 0), text_strip, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+        
+        strip_width = max(text_width + VIDEO_WIDTH, VIDEO_WIDTH * 2)
+        strip_height = max(text_height + 10, bar_height - 20)
+        
+        # Create text image once
+        strip_img = Image.new("RGBA", (strip_width, strip_height), (0, 0, 0, 0))
+        strip_draw = ImageDraw.Draw(strip_img)
+        
+        y_pos = (strip_height - text_height) // 2
+        # Simple outline
+        for ox, oy in [(-1,0), (1,0), (0,-1), (0,1)]:
+            strip_draw.text((ox, y_pos + oy), text_strip, font=font, fill=(0, 0, 0, 255))
+        strip_draw.text((0, y_pos), text_strip, font=font, fill=(255, 255, 255, 255))
+        
+        strip_array = np.array(strip_img)
+        
+        # Pre-create breaking news badge
+        badge = Image.new("RGB", (250, bar_height), (255, 255, 255))
+        badge_draw = ImageDraw.Draw(badge)
+        
+        # Simple badge design
+        badge_draw.rectangle([0, 0, 250, bar_height], fill=(255, 255, 255))
+        badge_draw.rectangle([5, 5, 245, bar_height - 5], fill=(240, 240, 240))
+        
+        font1 = load_font(40)
+        font2 = load_font(32)
+        
+        badge_draw.text((50, 20), "BREAKING", font=font1, fill=(220, 20, 60))
+        badge_draw.text((80, 55), "NEWS", font=font2, fill=(40, 40, 40))
+        
+        badge_array = np.array(badge)
+        
+        def make_ticker_frame(t: float):
+            # Create background
+            frame = np.full((bar_height, bar_width, 3), (160, 20, 30), dtype=np.uint8)
+            
+            # Calculate scroll position
+            shift = int((t * speed) % strip_width)
+            x_pos = -shift
+            
+            # Composite text onto frame (simplified)
+            y_pos = (bar_height - strip_height) // 2
+            
+            while x_pos < bar_width:
+                left = max(0, x_pos)
+                right = min(bar_width, x_pos + strip_width)
+                
+                if right > left:
+                    src_x1 = left - x_pos
+                    src_x2 = src_x1 + (right - left)
+                    
+                    text_section = strip_array[:, src_x1:src_x2, :]
+                    alpha = text_section[:, :, 3:4] / 255.0
+                    
+                    frame[y_pos:y_pos + strip_height, left:right, :] = (
+                        (1 - alpha) * frame[y_pos:y_pos + strip_height, left:right, :] +
+                        alpha * text_section[:, :, :3]
+                    ).astype(np.uint8)
+                
+                x_pos += strip_width
+            
+            # Add badge
+            frame[0:bar_height, 0:250, :] = badge_array
+            
+            return frame
+        
+        clip = VideoClip(make_ticker_frame, duration=duration)
+        return clip.set_position((0, TICKER_Y))
+        
+    except Exception as e:
+        logger.error(f"Ticker error: {e}")
+        # Return simple colored bar as fallback
+        return ColorClip(size=(VIDEO_WIDTH, TICKER_HEIGHT), color=(160, 20, 30), duration=duration).set_position((0, TICKER_Y))
 
-        # Download assets
-        background_path = download_file(bulletin_data.background_url)
-        if background_path:
-            temp_files.append(background_path)
-            logger.info("✓ Background downloaded")
+# ==============================================================================
+# VIDEO PROCESSING - OPTIMIZED
+# ==============================================================================
+
+async def process_video_segment_async(
+    media_path: Optional[Path],
+    text: Optional[str],
+    voice_name: str,
+    segment_type: str,
+    session_dirs: Dict[str, Path],
+    session_id: str
+) -> Tuple[Optional[VideoClip], float]:
+    """Async process individual video segment with dynamic voice support"""
+    try:
+        logger.info(f"[{session_id}] Processing segment: {segment_type}")
+        
+        # Normalize segment types
+        segment_type = segment_type.lower() if segment_type else ""
+        
+        is_fullscreen = segment_type in ["intro", "outro"]
+        
+        # Calculate TTS duration if text exists
+        tts_duration = 0
+        if text and text.strip():
+            tts_duration = len(text.strip()) * 0.06  # Approximate duration
+            logger.info(f"[{session_id}] TTS duration estimate: {tts_duration:.2f}s")
+        
+        if media_path and media_path.exists():
+            file_ext = str(media_path).lower()
+            
+            # Process video files
+            if file_ext.endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
+                # Load video with target resolution for speed
+                clip = VideoFileClip(str(media_path))
+                video_duration = clip.duration if clip.duration else 10.0
+                
+                # Determine final duration
+                if segment_type == "main_news" and tts_duration > 0:
+                    if video_duration >= tts_duration:
+                        final_duration = video_duration
+                    else:
+                        # Loop video to match TTS duration
+                        loops = math.ceil(tts_duration / video_duration)
+                        clip = concatenate_videoclips([clip] * loops, method="compose")
+                        final_duration = tts_duration
+                else:
+                    final_duration = video_duration
+                
+                # Safely trim to duration
+                safe_duration = min(final_duration, clip.duration - 0.1) if clip.duration > 0.1 else final_duration
+                clip = clip.subclip(0, safe_duration)
+                
+                # Handle positioning
+                if is_fullscreen:
+                    clip = clip.resize((VIDEO_WIDTH, VIDEO_HEIGHT))
+                else:
+                    # Position in content area
+                    original_w, original_h = clip.w, clip.h
+                    
+                    if original_h > original_w:  # Portrait video
+                        scale = CONTENT_HEIGHT / original_h
+                        new_w = int(original_w * scale)
+                        new_h = CONTENT_HEIGHT
+                        
+                        if new_w > CONTENT_WIDTH:
+                            scale = CONTENT_WIDTH / original_w
+                            new_w = CONTENT_WIDTH
+                            new_h = int(original_h * scale)
+                        
+                        clip = clip.resize((new_w, new_h))
+                        x_offset = CONTENT_X + (CONTENT_WIDTH - new_w) // 2
+                        y_offset = CONTENT_Y + (CONTENT_HEIGHT - new_h) // 2
+                        
+                        # Add background for portrait videos
+                        bg = ColorClip(size=(CONTENT_WIDTH, CONTENT_HEIGHT), color=(25, 30, 40), duration=safe_duration)
+                        bg = bg.set_position((CONTENT_X, CONTENT_Y))
+                        clip = clip.set_position((x_offset, y_offset))
+                        clip = CompositeVideoClip([bg, clip])
+                    else:  # Landscape video
+                        clip = clip.resize((CONTENT_WIDTH, CONTENT_HEIGHT))
+                        clip = clip.set_position((CONTENT_X, CONTENT_Y))
+                
+                # Handle audio
+                if segment_type == "main_news":
+                    clip = clip.without_audio()
+                    if text and text.strip():
+                        audio = await create_tts_audio_async(text, voice_name, safe_duration, 
+                                                            session_dirs["audio"], session_id)
+                        if audio:
+                            clip = clip.set_audio(audio)
+                        else:
+                            clip = clip.set_audio(create_silence_audio(safe_duration))
+                    else:
+                        clip = clip.set_audio(create_silence_audio(safe_duration))
+                
+                return clip, safe_duration
+            
+            # Process image files
+            else:
+                img = Image.open(media_path).convert("RGB")
+                duration = tts_duration if tts_duration > 0 else 10.0
+                
+                if is_fullscreen:
+                    img = img.resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.BILINEAR)
+                    clip = ImageClip(np.array(img), duration=duration)
+                else:
+                    img = img.resize((CONTENT_WIDTH, CONTENT_HEIGHT), Image.Resampling.BILINEAR)
+                    clip = ImageClip(np.array(img), duration=duration)
+                    clip = clip.set_position((CONTENT_X, CONTENT_Y))
+                
+                if text and text.strip():
+                    audio = await create_tts_audio_async(text, voice_name, duration, 
+                                                        session_dirs["audio"], session_id)
+                    if audio:
+                        clip = clip.set_audio(audio)
+                
+                return clip, duration
+        
+        # No media - create placeholder
+        duration = tts_duration if tts_duration > 0 else 10.0
+        
+        if is_fullscreen:
+            placeholder = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(40, 45, 55), duration=duration)
         else:
-            logger.warning("Background download failed; fallback color will be used")
+            placeholder = ColorClip(size=(CONTENT_WIDTH, CONTENT_HEIGHT), color=(40, 45, 55), duration=duration)
+            placeholder = placeholder.set_position((CONTENT_X, CONTENT_Y))
+        
+        if text and text.strip():
+            audio = await create_tts_audio_async(text, voice_name, duration, 
+                                                session_dirs["audio"], session_id)
+            if audio:
+                placeholder = placeholder.set_audio(audio)
+        
+        return placeholder, duration
+        
+    except Exception as e:
+        logger.error(f"[{session_id}] Segment processing error: {e}")
+        # Return fallback clip
+        fallback = ColorClip(size=(CONTENT_WIDTH, CONTENT_HEIGHT), color=(40, 45, 55), duration=10.0)
+        return fallback.set_position((CONTENT_X, CONTENT_Y)), 10.0
 
-        logo_path = download_file(bulletin_data.logo_url)
-        if logo_path:
-            temp_files.append(logo_path)
-            logger.info("✓ Logo downloaded")
-        else:
-            logger.warning("Logo download failed")
+# ==============================================================================
+# MAIN BULLETIN PROCESSING - OPTIMIZED
+# ==============================================================================
 
-        frame_path: Optional[Path] = None
-
-        # Prep segments
-        segment_rows = []
+async def process_bulletin_optimized(bulletin_data: BulletinData, session_id: str) -> Dict[str, Any]:
+    """Optimized bulletin processing with dynamic voice support"""
+    
+    session_dirs = None
+    clips_to_close = []
+    start_time = time.time()
+    
+    try:
+        # Create session directories
+        session_dirs = SessionManager.create_session_dirs(session_id)
+        
+        logger.info(f"\n{'='*80}")
+        logger.info(f"[{session_id}] 🎬 PROCESSING BULLETIN")
+        logger.info(f"[{session_id}] 🗣️ Voice: {bulletin_data.language_name}")
+        logger.info(f"[{session_id}] 📁 Session: {session_id}")
+        logger.info(f"{'='*80}\n")
+        
+        # Prepare all download tasks
+        download_tasks = []
+        download_map = {}
+        
+        # Background and logo
+        download_tasks.append(("background", download_file_async(
+            bulletin_data.background_url, session_dirs["downloads"], session_id)))
+        download_tasks.append(("logo", download_file_async(
+            bulletin_data.logo_url, session_dirs["downloads"], session_id)))
+        
+        # Frame URL (get first one found)
+        frame_url = None
+        for segment in bulletin_data.content:
+            if segment.frame_url:
+                frame_url = segment.frame_url
+                break
+        
+        if frame_url:
+            download_tasks.append(("frame", download_file_async(
+                frame_url, session_dirs["downloads"], session_id)))
+        
+        # Media files for segments
+        for idx, segment in enumerate(bulletin_data.content):
+            if segment.media_url:
+                download_tasks.append((f"media_{idx}", download_file_async(
+                    segment.media_url, session_dirs["downloads"], session_id)))
+        
+        # Execute all downloads in parallel
+        logger.info(f"[{session_id}] 📥 Downloading {len(download_tasks)} resources in parallel...")
+        download_results = await asyncio.gather(*[task[1] for task in download_tasks])
+        
+        # Map results
+        for (key, _), result in zip(download_tasks, download_results):
+            download_map[key] = result
+        
+        background_path = download_map.get("background")
+        logo_path = download_map.get("logo")
+        frame_path = download_map.get("frame")
+        
+        # Process segments data
+        segment_data = []
         total_duration = 0.0
-        for idx, seg in enumerate(bulletin_data.content):
-            logger.info(f"Segment {idx+1}: {seg.segment_type}")
-            if seg.frame_url and not frame_path:
-                frame_path = download_file(seg.frame_url)
-                if frame_path:
-                    temp_files.append(frame_path)
-                    logger.info("  ✓ Frame downloaded")
-
-            duration = seg.duration if seg.duration else 10.0
-            media_path = None
-            if seg.media_url:
-                media_path = download_file(seg.media_url)
-                if media_path:
-                    temp_files.append(media_path)
-                    logger.info(f"  ✓ Media downloaded: {media_path.name}")
-                    if str(media_path).lower().endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
-                        has_audio = check_video_has_audio(media_path)
-                        logger.info(f"  Audio status: {'Has audio' if has_audio else 'No audio - will add TTS if text available'}")
-
-            segment_rows.append({
-                "segment": seg,
+        
+        logger.info(f"[{session_id}] 📊 Processing {len(bulletin_data.content)} segments...")
+        
+        for idx, segment in enumerate(bulletin_data.content):
+            logger.info(f"\n[{session_id}] Segment {idx+1}:")
+            logger.info(f"  Type: {segment.segment_type}")
+            logger.info(f"  Has text: {bool(segment.text)}")
+            logger.info(f"  Has media: {bool(segment.media_url)}")
+            
+            # Get media path
+            media_path = download_map.get(f"media_{idx}")
+            
+            # Calculate duration
+            if segment.duration:
+                duration = segment.duration
+            else:
+                if media_path and str(media_path).lower().endswith((".mp4", ".avi", ".mov")):
+                    duration = await asyncio.get_event_loop().run_in_executor(
+                        executor, get_video_duration_fast, media_path, session_id
+                    )
+                elif segment.text:
+                    duration = len(segment.text.strip()) * 0.06  # Estimate
+                else:
+                    duration = 10.0
+            
+            segment_data.append({
+                "segment": segment,
                 "media_path": media_path,
                 "duration": duration
             })
             total_duration += duration
-
-        logger.info(f"\n📊 Total duration: {total_duration:.1f}s")
-        logger.info("\n🎬 Building layers...")
-
-        # Layer 1: Background
-        background_clip = None
+        
+        logger.info(f"\n[{session_id}] Total duration: {total_duration:.1f}s")
+        
+        # Create background layer
+        logger.info(f"\n[{session_id}] Building layers...")
+        
         if background_path and background_path.exists():
             try:
-                if str(background_path).lower().endswith((".mp4", ".avi", ".mov", ".mkv", ".webm")):
-                    bg = VideoFileClip(str(background_path)).resize((VIDEO_WIDTH, VIDEO_HEIGHT))
-                    if bg.duration < total_duration and bg.duration > 0:
-                        loops = math.ceil(total_duration / bg.duration)
-                        bg = concatenate_videoclips([bg] * loops, method="compose")
-                    background_clip = bg.subclip(0, total_duration).without_audio()
+                if str(background_path).lower().endswith((".mp4", ".avi", ".mov")):
+                    bg_clip = VideoFileClip(str(background_path)).resize((VIDEO_WIDTH, VIDEO_HEIGHT))
+                    
+                    if bg_clip.duration and bg_clip.duration < total_duration:
+                        loops = math.ceil(total_duration / bg_clip.duration)
+                        bg_list = [bg_clip] * loops
+                        bg_clip = concatenate_videoclips(bg_list, method="compose")
+                    
+                    safe_duration = min(total_duration, bg_clip.duration - 0.1) if bg_clip.duration > 0.1 else total_duration
+                    background_clip = bg_clip.subclip(0, safe_duration).without_audio()
                 else:
-                    img = Image.open(background_path).convert("RGB").resize((VIDEO_WIDTH, VIDEO_HEIGHT), Image.Resampling.LANCZOS)
+                    img = Image.open(background_path).convert("RGB").resize((VIDEO_WIDTH, VIDEO_HEIGHT))
                     background_clip = ImageClip(np.array(img), duration=total_duration)
-                logger.info("  ✓ Background layer ready")
             except Exception as e:
-                logger.error(f"Background error: {e}")
-
-        if not background_clip:
+                logger.error(f"[{session_id}] Background error: {e}")
+                background_clip = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(25, 30, 40), duration=total_duration)
+        else:
             background_clip = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(25, 30, 40), duration=total_duration)
-            logger.info("  ✓ Fallback background ready")
+        
         clips_to_close.append(background_clip)
-
-        # Collect layers
+        
+        # Build composite
         all_clips = [background_clip]
         current_time = 0.0
-        valid_segments = 0
-
-        # Layer 2: Content segments (with audio logic)
-        logger.info("\n🎤 Processing segments with audio...")
-        for idx, row in enumerate(segment_rows):
-            dur = row["duration"]
-            seg: ContentSegment = row["segment"]
-            logger.info(f"  ➤ Adding segment {idx+1} at {current_time:.2f}s")
-            
-            # Log if TTS will be attempted
-            if seg.text and seg.text.strip():
-                logger.info(f"    Text for TTS: '{seg.text[:60]}...'")
-
-            clip = process_video_segment(
-                media_path=row["media_path"],
-                duration=dur,
-                text=seg.text,
-                language_code=bulletin_data.language_code,
-                loop=True
+        actual_durations = []
+        
+        # Process segments in parallel
+        segment_tasks = []
+        for data in segment_data:
+            seg = data["segment"]
+            segment_tasks.append(
+                process_video_segment_async(
+                    media_path=data["media_path"],
+                    text=seg.text,
+                    voice_name=bulletin_data.language_name,  # Pass the dynamic voice name
+                    segment_type=seg.segment_type,
+                    session_dirs=session_dirs,
+                    session_id=session_id
+                )
             )
+        
+        logger.info(f"[{session_id}] Processing segments in parallel...")
+        segment_results = await asyncio.gather(*segment_tasks)
+        
+        # Add segments to timeline
+        for idx, (result, data) in enumerate(zip(segment_results, segment_data)):
+            clip, actual_duration = result
+            
             if clip:
                 clip = clip.set_start(current_time)
                 clips_to_close.append(clip)
                 all_clips.append(clip)
-                valid_segments += 1
-                
-                # Check if audio was added
-                if clip.audio:
-                    logger.info(f"    ✓ Segment {idx+1} has audio")
-                else:
-                    logger.info(f"    ⚠ Segment {idx+1} has no audio")
+                actual_durations.append(actual_duration)
             else:
-                logger.error("    ✗ Segment clip failed; using gray placeholder")
-                ph = ColorClip(size=(CONTENT_WIDTH, CONTENT_HEIGHT), color=(40, 45, 55), duration=dur)
-                ph = ph.set_position((CONTENT_X, CONTENT_Y)).set_start(current_time)
-                clips_to_close.append(ph)
-                all_clips.append(ph)
-
-            current_time += dur
-
-        # Layer 3: Frame
-        logger.info("\n  ➤ Adding frame...")
-        frame_clip = create_frame_border(frame_path, total_duration)
-        clips_to_close.append(frame_clip)
-        all_clips.append(frame_clip)
-        logger.info("  ✓ Frame added")
-
-        # Layer 4: Logo
-        logger.info("  ➤ Adding logo...")
-        logo_clip = create_logo_overlay(total_duration, logo_path)
-        clips_to_close.append(logo_clip)
-        all_clips.append(logo_clip)
-        logger.info("  ✓ Logo added")
-
-        # Layer 5: Ticker (opaque bar)
-        logger.info("  ➤ Adding ticker...")
-        ticker_clip = create_scrolling_ticker_pil(bulletin_data.ticker, total_duration)
-        clips_to_close.append(ticker_clip)
-        all_clips.append(ticker_clip)
-        logger.info("  ✓ Ticker added")
-
-        # Layer 6 (LAST/TOP): Top-headline overlays
-        logger.info("  ➤ Adding text overlays as TOP layer...")
-        current_time = 0.0
-        for idx, row in enumerate(segment_rows):
-            dur = row["duration"]
-            seg: ContentSegment = row["segment"]
-            if seg.top_headline:
-                txt = create_text_overlay_pil(seg.top_headline, dur)
-                if txt:
-                    txt = txt.set_start(current_time)
-                    clips_to_close.append(txt)
-                    all_clips.append(txt)
-                    logger.info(f"    ✓ Text overlay added for seg {idx+1}: '{seg.top_headline}'")
-                else:
-                    logger.error(f"    ✗ Text overlay failed for seg {idx+1}")
-            current_time += dur
-
-        # Composite
-        logger.info("\n🎨 Compositing final video...")
-        if valid_segments == 0:
-            final_video = ColorClip(size=(VIDEO_WIDTH, VIDEO_HEIGHT), color=(25, 30, 40), duration=total_duration)
-            clips_to_close.append(final_video)
-        else:
-            final_video = CompositeVideoClip(all_clips, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
+                actual_durations.append(data["duration"])
             
-            # Check if final video has audio
-            if final_video.audio:
-                logger.info("  ✓ Final video has audio track")
-            else:
-                logger.warning("  ⚠ Final video has no audio track")
-
-        # Thumbnail
-        logger.info("\n📸 Creating thumbnail...")
-        try:
-            frame1 = final_video.get_frame(min(1.0, max(0.0, total_duration/2.0)))
-            thumb = Image.fromarray(frame1).resize((1280, 720), Image.Resampling.LANCZOS)
-        except Exception as e:
-            logger.error(f"Thumbnail frame error: {e}")
-            thumb = Image.new("RGB", (1280, 720), (25, 30, 40))
-
-        thumbnail_path = THUMBNAILS_DIR / f"thumb_{bulletin_data.id}_{uuid.uuid4()}.jpg"
-        thumb.save(thumbnail_path, "JPEG", quality=95)
-        logger.info("  ✓ Thumbnail saved")
-
-        # Render
-        video_filename = f"bulletin_{bulletin_data.id}_{uuid.uuid4()}.mp4"
-        video_path = VIDEO_BULLETIN_DIR / video_filename
-
-        logger.info("\n💾 Rendering final video (H.264 + AAC @ CRF 20)...")
-        logger.info("  Please wait, this may take a few moments...")
+            current_time += actual_durations[-1]
         
-        try:
-            # Ensure audio codec is set properly
-            final_video.write_videofile(
-                str(video_path),
-                fps=24,
-                codec="libx264",
-                audio_codec="aac",
-                audio_bitrate="128k",  # Ensure good audio quality
-                preset="medium",
-                ffmpeg_params=["-crf", "20", "-ar", "44100"],  # Set audio sample rate
-                threads=4,
-                logger=None,
-                verbose=False
-            )
-            logger.info("  ✓ Render complete")
+        # Update total duration
+        total_duration = sum(actual_durations)
+        
+        # Add overlays for each segment
+        current_time = 0.0
+        
+        logger.info(f"[{session_id}] Adding overlays...")
+        
+        for idx, (data, duration) in enumerate(zip(segment_data, actual_durations)):
+            seg = data["segment"]
+            segment_type = seg.segment_type.lower() if seg.segment_type else ""
             
-            # Verify the output has audio
-            if check_video_has_audio(video_path):
-                logger.info("  ✓ Output video has audio")
-            else:
-                logger.warning("  ⚠ Output video has no audio - check TTS generation")
+            is_fullscreen = segment_type in ["intro", "outro"]
+            
+            if not is_fullscreen:
+                # Add frame
+                if frame_path:
+                    frame_clip = create_frame_border(frame_path, duration)
+                    frame_clip = frame_clip.set_start(current_time)
+                    clips_to_close.append(frame_clip)
+                    all_clips.append(frame_clip)
                 
-        except Exception as e:
-            logger.error(f"Render error: {e}", exc_info=True)
-            raise
-
-        # Cleanup clips
+                # Add logo
+                if logo_path:
+                    logo_clip = create_logo_overlay(duration, logo_path)
+                    logo_clip = logo_clip.set_start(current_time)
+                    clips_to_close.append(logo_clip)
+                    all_clips.append(logo_clip)
+                
+                # Add ticker
+                ticker_clip = create_ticker_optimized(bulletin_data.ticker, duration)
+                ticker_clip = ticker_clip.set_start(current_time)
+                clips_to_close.append(ticker_clip)
+                all_clips.append(ticker_clip)
+            
+            # Add top headline
+            if seg.top_headline:
+                text_clip = create_text_overlay(seg.top_headline, duration)
+                if text_clip:
+                    text_clip = text_clip.set_start(current_time)
+                    clips_to_close.append(text_clip)
+                    all_clips.append(text_clip)
+            
+            # Add bottom headline
+            if seg.bottom_headline and not is_fullscreen:
+                bottom_clip = create_bottom_headline(seg.bottom_headline, duration)
+                if bottom_clip:
+                    bottom_clip = bottom_clip.set_start(current_time)
+                    clips_to_close.append(bottom_clip)
+                    all_clips.append(bottom_clip)
+            
+            current_time += duration
+        
+        # Create final composite
+        logger.info(f"\n[{session_id}] Creating final composite...")
+        final_video = CompositeVideoClip(all_clips, size=(VIDEO_WIDTH, VIDEO_HEIGHT))
+        final_video = final_video.set_duration(total_duration)
+        
+        # Generate unique alphanumeric ID (15 characters, lowercase)
+        unique_id = ''.join([uuid.uuid4().hex[:8], uuid.uuid4().hex[:7]]).lower()
+        
+        # Generate thumbnail
         try:
-            final_video.close()
+            safe_time = min(1.0, (total_duration - 0.2) / 2) if total_duration > 0.2 else 0.1
+            frame = final_video.get_frame(safe_time)
+            thumbnail = Image.fromarray(frame).resize((1280, 720), Image.Resampling.BILINEAR)
         except:
-            pass
-        for c in clips_to_close:
+            thumbnail = Image.new("RGB", (1280, 720), (25, 30, 40))
+        
+        thumbnail_filename = f"{unique_id}.jpg"
+        thumbnail_path = THUMBNAILS_DIR / thumbnail_filename
+        thumbnail.save(thumbnail_path, "JPEG", quality=90)
+        
+        # Render video with optimized settings
+        video_filename = f"{unique_id}.mp4"
+        video_path = VIDEO_BULLETIN_DIR / video_filename
+        
+        logger.info(f"\n[{session_id}] Rendering video...")
+        logger.info(f"  Output: {video_filename}")
+        logger.info(f"  Duration: {total_duration:.1f}s")
+        logger.info(f"  Voice: {bulletin_data.language_name}")
+        
+        # Optimized rendering parameters
+        final_video.write_videofile(
+            str(video_path),
+            fps=RENDER_FPS,
+            codec="libx264",
+            audio_codec="aac",
+            audio_bitrate="128k",
+            preset=RENDER_PRESET,  # "fast" for balance
+            ffmpeg_params=[
+                "-crf", RENDER_CRF,
+                "-ar", "44100",
+                "-pix_fmt", "yuv420p",
+                "-movflags", "+faststart",
+                "-threads", "0"  # Use all CPU cores
+            ],
+            threads=8,
+            logger=None,
+            verbose=False,
+            temp_audiofile=str(session_dirs["temp"] / f"temp_audio_{session_id}.m4a")
+        )
+        
+        # Cleanup
+        final_video.close()
+        for clip in clips_to_close:
             try:
-                c.close()
+                clip.close()
             except:
                 pass
-
-        # Temp + audio cleanup
-        for tp in temp_files:
-            _safe_unlink(tp)
-        for a in AUDIO_DIR.glob("*.mp3"):
-            _safe_unlink(a)
-
-        size_mb = video_path.stat().st_size / (1024 * 1024)
-        logger.info(f"\n✅ SUCCESS: {video_filename}")
-        logger.info(f"📁 Size: {size_mb:.1f} MB")
-        logger.info(f"⏱ Duration: {total_duration:.1f}s")
-        logger.info(f"📺 Resolution: {VIDEO_WIDTH}x{VIDEO_HEIGHT}")
-        logger.info("="*60 + "\n")
-
-        return {
-            "id": bulletin_data.id,
-            "status": "completed",
-            "video_url": f"/video-bulletin/{video_filename}",
-            "thumbnail_url": f"/thumbnails/{thumbnail_path.name}",
-            "video_path": str(video_path),
-            "thumbnail_path": str(thumbnail_path),
-            "duration": total_duration,
-            "resolution": f"{VIDEO_WIDTH}x{VIDEO_HEIGHT}",
-            "file_size_mb": round(size_mb, 2),
-            "generated_at": datetime.now().isoformat()
-        }
-
+        
+        await SessionManager.cleanup_session_async(session_id)
+        
+        # Calculate metrics
+        processing_time = time.time() - start_time
+        file_size_mb = video_path.stat().st_size / (1024 * 1024)
+        
+        logger.info(f"\n[{session_id}] ✅ SUCCESS!")
+        logger.info(f"  File: {video_filename}")
+        logger.info(f"  Size: {file_size_mb:.1f} MB")
+        logger.info(f"  Duration: {total_duration:.1f}s")
+        logger.info(f"  Processing time: {processing_time:.1f}s")
+        logger.info(f"  Voice used: {bulletin_data.language_name}")
+        
+        return f"/video-bulletin/{video_filename}"
+        
     except Exception as e:
-        logger.error(f"\n❌ ERROR: {e}", exc_info=True)
-        logger.info("="*60 + "\n")
-        # Best-effort cleanup
-        for c in clips_to_close:
-            try: c.close()
-            except: pass
-        for tp in temp_files:
-            _safe_unlink(tp)
-        for a in AUDIO_DIR.glob("*.mp3"):
-            _safe_unlink(a)
-        return {
-            "id": bulletin_data.id,
-            "status": "failed",
-            "error": str(e),
-            "generated_at": datetime.now().isoformat()
-        }
+        logger.error(f"[{session_id}] Error: {e}", exc_info=True)
+        
+        # Cleanup on error
+        for clip in clips_to_close:
+            try:
+                clip.close()
+            except:
+                pass
+        
+        if session_dirs:
+            await SessionManager.cleanup_session_async(session_id)
+        
+        raise HTTPException(status_code=500, detail=str(e))
 
-# --------------------------------------------------------------------------------------
-# Routes
-# --------------------------------------------------------------------------------------
-@app.post("/generate-bulletin", response_model=BulletinResponse)
-async def generate_bulletin(request: BulletinRequest):
+# ==============================================================================
+# API ENDPOINTS
+# ==============================================================================
+
+@app.post("/generate-bulletin")
+async def generate_bulletin(request: BulletinData):
+    """Generate news bulletin endpoint with dynamic voice support"""
     try:
-        results = []
-        for b in request.data:
-            out = await process_bulletin(b)
-            results.append(out)
-        ok = [r for r in results if r.get("status") == "completed"]
-        return BulletinResponse(
-            status=len(ok) > 0,
-            message=f"Generated {len(ok)}/{len(request.data)} bulletins",
-            data=results
-        )
+        session_id = SessionManager.create_session_id()
+        logger.info(f"\n🚀 New request - Session: {session_id}")
+        logger.info(f"🗣️ Voice requested: {request.language_name}")
+        
+        # Process bulletin
+        video_url = await process_bulletin_optimized(request, session_id)
+        
+        return video_url
+        
     except Exception as e:
-        logger.error(f"Processing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        logger.error(f"API error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/video-bulletin/{filename}")
 async def get_video(filename: str):
-    p = VIDEO_BULLETIN_DIR / filename
-    if not p.exists():
+    """Download video endpoint"""
+    video_path = VIDEO_BULLETIN_DIR / filename
+    if not video_path.exists():
         raise HTTPException(status_code=404, detail="Video not found")
-    return FileResponse(path=p, media_type="video/mp4", filename=filename)
+    return FileResponse(path=video_path, media_type="video/mp4", filename=filename)
 
 @app.get("/thumbnails/{filename}")
 async def get_thumbnail(filename: str):
-    p = THUMBNAILS_DIR / filename
-    if not p.exists():
+    """Get thumbnail endpoint"""
+    thumb_path = THUMBNAILS_DIR / filename
+    if not thumb_path.exists():
         raise HTTPException(status_code=404, detail="Thumbnail not found")
-    return FileResponse(path=p, media_type="image/jpeg", filename=filename)
+    return FileResponse(path=thumb_path, media_type="image/jpeg", filename=filename)
+
+@app.get("/json-logs/{session_id}")
+async def get_json_log(session_id: str):
+    """Get JSON log endpoint"""
+    log_path = JSON_LOGS_DIR / f"{session_id}.json"
+    if not log_path.exists():
+        raise HTTPException(status_code=404, detail="Log not found")
+    return FileResponse(path=log_path, media_type="application/json", filename=f"{session_id}.json")
 
 @app.get("/")
 async def root():
+    """API information endpoint"""
     return {
-        "name": "News Bulletin Generator API",
-        "version": "9.0.2",
+        "name": "News Bulletin Generator API - Dynamic Voice Support",
+        "version": "13.0.0",
         "status": "ready",
         "features": [
-            "✅ FIXED: Google TTS audio now working properly",
-            "✅ FIXED: Top headline position adjusted (moved up to Y=50)",
-            "✅ Smart audio detection - preserves original audio when present",
-            "✅ gTTS only added when no audio (with language normalization)",
-            "✅ PIL-based text overlay (topmost, now properly positioned)",
-            "✅ PIL-based scrolling ticker (no TextClip dependency)",
-            "✅ Audio speed adjustment to fit duration",
-            "✅ Frame display with proper sizing",
-            "✅ Enhanced audio logging for debugging",
-            "✅ Better error handling & cleanup"
+            "Dynamic Google TTS voice support",
+            "Any voice name compatibility",
+            "Automatic language detection",
+            "Session isolation",
+            "Auto-cleanup",
+            "JSON logging",
+            "HD output (1920x1080)",
+            "Parallel processing",
+            "Resource caching",
+            "Optimized rendering"
         ],
+        "voice_support": {
+            "description": "Supports any Google TTS voice name",
+            "examples": [
+                "hi-IN-Wavenet-D",
+                "en-IN-Standard-A",
+                "bn-IN-Neural2-B",
+                "ta-IN-Wavenet-C",
+                "te-IN-Standard-D"
+            ],
+            "fallback": "Automatic language detection and gTTS conversion"
+        },
         "endpoints": {
-            "POST /generate-bulletin": "Generate bulletin with JSON payload",
+            "POST /generate-bulletin": "Generate bulletin with dynamic voice",
             "GET /video-bulletin/{filename}": "Download video",
-            "GET /thumbnails/{filename}": "Get thumbnail"
-        },
-        "json_structure": {
-            "top_headline": "Text to display in upper area (Y=50)",
-            "text": "Text for gTTS narration (used if video has no audio / images / placeholders)",
-            "media_url": "Video or image URL",
-            "frame_url": "Frame overlay image URL",
-            "duration": "Segment duration in seconds"
-        },
-        "changes": {
-            "text_position": "Headlines now at Y=50 (was 100) to fit within frame",
-            "audio_handling": "Improved TTS generation with better error handling",
-            "audio_quality": "Added audio bitrate and sample rate settings"
+            "GET /thumbnails/{filename}": "Get thumbnail",
+            "GET /json-logs/{session_id}": "Get session log",
+            "GET /status": "System status",
+            "DELETE /cleanup": "Manual cleanup"
         }
     }
 
+@app.get("/status")
+async def get_status():
+    """System status endpoint"""
+    try:
+        video_count = len(list(VIDEO_BULLETIN_DIR.glob("*.mp4")))
+        thumb_count = len(list(THUMBNAILS_DIR.glob("*.jpg")))
+        log_count = len(list(JSON_LOGS_DIR.glob("*.json")))
+        temp_sessions = len(list(TEMP_BASE_DIR.iterdir()))
+        cache_size = len(REQUEST_CACHE)
+        
+        return {
+            "status": "operational",
+            "videos": video_count,
+            "thumbnails": thumb_count,
+            "logs": log_count,
+            "active_sessions": temp_sessions,
+            "cache_items": cache_size,
+            "workers": MAX_WORKERS,
+            "voice_system": "Dynamic Google TTS Voice Support"
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.delete("/cleanup")
 async def cleanup():
+    """Manual cleanup endpoint"""
     try:
-        count = {"temp": 0, "old_videos": 0, "old_thumbs": 0, "audio": 0}
-
-        for f in TEMP_DIR.glob("*"):
-            try:
-                f.unlink()
-                count["temp"] += 1
-            except:
-                pass
-
+        count = {"temp": 0, "old_files": 0, "cache": 0}
+        
+        # Clean temp directories
+        for d in TEMP_BASE_DIR.iterdir():
+            if d.is_dir():
+                try:
+                    shutil.rmtree(d)
+                    count["temp"] += 1
+                except:
+                    pass
+        
+        # Clean old files (>24 hours)
         cutoff = datetime.now().timestamp() - 86400
-        for f in VIDEO_BULLETIN_DIR.glob("*.mp4"):
-            try:
-                if f.stat().st_mtime < cutoff:
-                    f.unlink()
-                    count["old_videos"] += 1
-            except:
-                pass
-
-        for f in THUMBNAILS_DIR.glob("*.jpg"):
-            try:
-                if f.stat().st_mtime < cutoff:
-                    f.unlink()
-                    count["old_thumbs"] += 1
-            except:
-                pass
-
-        for f in AUDIO_DIR.glob("*.mp3"):
-            try:
-                f.unlink()
-                count["audio"] += 1
-            except:
-                pass
-
-        logger.info(f"Cleanup: {count}")
+        
+        for path in [VIDEO_BULLETIN_DIR, THUMBNAILS_DIR, JSON_LOGS_DIR]:
+            for f in path.glob("*"):
+                try:
+                    if f.stat().st_mtime < cutoff:
+                        f.unlink()
+                        count["old_files"] += 1
+                except:
+                    pass
+        
+        # Clear cache
+        global REQUEST_CACHE
+        count["cache"] = len(REQUEST_CACHE)
+        REQUEST_CACHE.clear()
+        
         return {"status": "success", "cleaned": count}
+        
     except Exception as e:
-        logger.error(f"Cleanup error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# --------------------------------------------------------------------------------------
-# Main
-# --------------------------------------------------------------------------------------
+async def cleanup_old_files_async():
+    """Async background cleanup task"""
+    try:
+        cutoff = datetime.now().timestamp() - 86400
+        
+        loop = asyncio.get_event_loop()
+        
+        for path in [VIDEO_BULLETIN_DIR, THUMBNAILS_DIR, JSON_LOGS_DIR]:
+            for f in path.glob("*"):
+                try:
+                    if f.stat().st_mtime < cutoff:
+                        await loop.run_in_executor(executor, f.unlink)
+                except:
+                    pass
+        
+        for d in TEMP_BASE_DIR.iterdir():
+            if d.is_dir():
+                try:
+                    if d.stat().st_mtime < cutoff:
+                        await loop.run_in_executor(executor, shutil.rmtree, d)
+                except:
+                    pass
+                    
+    except Exception as e:
+        logger.error(f"Cleanup error: {e}")
+
+# ==============================================================================
+# STARTUP & SHUTDOWN
+# ==============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize on startup"""
+    logger.info("\n" + "="*80)
+    logger.info(" " * 15 + "NEWS BULLETIN GENERATOR v13.0 - DYNAMIC VOICE")
+    logger.info("="*80)
+    logger.info("\n✅ System initialized with dynamic voice support!")
+    logger.info(f"  • {MAX_WORKERS} concurrent workers")
+    logger.info(f"  • {RENDER_PRESET} encoding preset")
+    logger.info(f"  • Dynamic Google TTS voice support")
+    logger.info(f"  • Automatic language detection")
+    logger.info(f"  • Resource caching active")
+    
+    # Setup fonts
+    await setup_fonts_async()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    logger.info("\n🛑 Shutting down...")
+    
+    # Close HTTP client
+    await http_client.aclose()
+    
+    # Clean all temp directories
+    for d in TEMP_BASE_DIR.iterdir():
+        if d.is_dir():
+            try:
+                shutil.rmtree(d)
+            except:
+                pass
+    
+    logger.info("Goodbye! 👋\n")
+
+# ==============================================================================
+# MAIN ENTRY POINT
+# ==============================================================================
+
 if __name__ == "__main__":
     print("\n" + "="*80)
-    print(" " * 20 + "NEWS BULLETIN GENERATOR v9.0.2")
+    print(" " * 15 + "NEWS BULLETIN GENERATOR v13.0 - DYNAMIC VOICE")
     print("="*80)
-    print("\n🎯 FIXES APPLIED:")
-    print("  ✅ Google TTS audio generation fixed")
-    print("  ✅ Top headline position adjusted to Y=50 (was 100)")
-    print("  ✅ Better audio handling with proper error logging")
-    print("  ✅ Audio quality settings improved")
-    print("\n🎯 KEY FEATURES:")
-    print("  ✅ Smart Audio Detection - Preserves original audio when present")
-    print("  ✅ gTTS only for silent videos - No audio overlap")
-    print("  ✅ PIL Text Overlay - Now properly positioned at top")
-    print("  ✅ PIL Ticker - No ImageMagick dependency")
-    print("  ✅ Audio Speed Adjustment - Fits narration to duration")
-    print("\n📐 LAYOUT SPECIFICATIONS:")
-    print(f"  • Output Resolution: {VIDEO_WIDTH}x{VIDEO_HEIGHT} (Full HD)")
-    print(f"  • Content Area: {CONTENT_WIDTH}x{CONTENT_HEIGHT} at ({CONTENT_X}, {CONTENT_Y})")
-    print(f"  • Logo Position: {LOGO_SIZE}x{LOGO_SIZE} at ({LOGO_X}, {LOGO_Y})")
-    print(f"  • Text Overlay: Position ({TEXT_OVERLAY_X}, {TEXT_OVERLAY_Y})")
-    print(f"  • Ticker Bar: Full width x {TICKER_HEIGHT}px at bottom")
-    print("\n🔧 AUDIO HANDLING:")
-    print("  • Videos WITH audio: Original audio preserved")
-    print("  • Videos WITHOUT audio: gTTS narration added if text provided")
-    print("  • Images & Placeholder: gTTS used if text provided")
-    print("  • Smart detection prevents audio overlap")
-    print("\n" + "-"*80)
-    print("🚀 Starting server at http://localhost:8000")
+    print("\n🗣️ DYNAMIC VOICE SUPPORT:")
+    print("  • Accepts any Google TTS voice name")
+    print("  • Automatic language detection from voice")
+    print("  • Examples: hi-IN-Wavenet-D, en-US-Standard-A, etc.")
+    print("  • Fallback to gTTS compatible languages")
+    print("\n⚡ PERFORMANCE OPTIMIZATIONS:")
+    print("  • Parallel resource downloads")
+    print("  • Async processing throughout")
+    print("  • Resource caching system")
+    print("  • Optimized video encoding")
+    print("  • Multi-core utilization")
+    print("\n📊 FEATURES RETAINED:")
+    print("  • All visual overlays (logo, ticker, headlines)")
+    print("  • Frame borders and decorations")
+    print("  • Multi-language TTS support")
+    print("  • JSON logging")
+    print("  • Session management")
+    print("  • Auto-cleanup")
+    print("\n📁 Directory Structure:")
+    print("  uploads/")
+    print("  ├── video-bulletin/    # Generated videos")
+    print("  ├── thumbnails/        # Video thumbnails")
+    print("  ├── temp/             # Temporary files (auto-cleaned)")
+    print("  └── json-logs/        # Request/response logs")
+    print("\n🎵 Voice Examples:")
+    print("  • Hindi: hi-IN-Wavenet-D, hi-IN-Neural2-A")
+    print("  • English: en-IN-Standard-B, en-US-Wavenet-A")
+    print("  • Bengali: bn-IN-Wavenet-A, bn-IN-Neural2-B")
+    print("  • Tamil: ta-IN-Standard-A, ta-IN-Wavenet-B")
+    print("  • Any Google Cloud TTS voice supported!")
+    print("\n🚀 Starting server at http://localhost:8000")
+    print("📝 API docs at http://localhost:8000/docs")
     print("="*80 + "\n")
+    
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
