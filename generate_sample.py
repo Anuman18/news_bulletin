@@ -1,46 +1,106 @@
+# pip install google-cloud-texttospeech pydub
+# Make sure FFmpeg is installed and on PATH
+
 from google.cloud import texttospeech
-import os
+from pydub import AudioSegment
+import re, io, os
 
-# Set your Google Cloud service account key
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"  # Replace with your key file
+# 1) Auth
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"  # your service account
 
-def generate_sample(language_code="hi-IN", voice_name="hi-IN-Chirp3-HD-Despina", gender="NEUTRAL"):
-    client = texttospeech.TextToSpeechClient()
+VOICE_NAME = "hi-IN-Chirp3-HD-Despina"
+LANG_CODE = "hi-IN"
 
-    # Example sample text
-    sample_text = {
-        "hi-IN": "Hello, friends! What’s the first thing you think of when you hear the word 'superpower'? Flying? Super strength? While those are cool, we all have real-life superpowers inside us!" "A personal superpower isn't about being the best at everything. It’s about what you do well and what makes you feel proud. Maybe your superpower is being a super kind friend, a fantastic artist, or a math whiz!" "Examples of personal superpowers are the Creative Genius, who loves to draw; the Problem Solver, who is great at puzzles; and the Caring Captain, who makes sure everyone feels included." "The first step to building your personal brand is to find your own superpower! Think about what you enjoy and what you're good at. You can be a mix of many things!" "Knowing your superpower is the first step. The next is to use it! When you use your superpower, you not only feel happy and confident but you also make the world around you a better place." "When people think of you, they’ll think of your amazing superpower! Just like we think of Sachin Tendulkar and remember his 'Dedication' superpower. This is the foundation of your personal brand!" "Now, for your mission: The Superpower Chart! Pause the video for just one minute." "On a piece of paper, create your own superpower chart. Write down what you enjoy and what you're good at. You'll soon see a whole new world of possibilities!" "You did it! That's it for today's episode. Thank you for joining us! We'll be back soon with more episodes of Self-Branding. Keep being curious!",
-    }.get(language_code, "This is a sample voice from Google Text to Speech.")
+# --- Pause mapping ---
+# Tune this to taste. Example: every 2 dots ~ 1 second, capped at 4s.
+def dots_to_ms(dots: str) -> int:
+    n = len(dots)
+    seconds = min(max(n // 2, 1), 4)   # "..." => 1s, "....." => 2s, "......." => 3s, cap 4s
+    return seconds * 1000
 
-    synthesis_input = texttospeech.SynthesisInput(text=sample_text)
+PAUSE_PATTERN = re.compile(r"\.{3,}")  # 3 or more dots trigger a pause
 
-    # Select the voice
+def parse_segments(text: str):
+    """
+    Split text into a sequence of ('text', chunk) and ('pause', ms) items
+    based on runs of 3+ dots.
+    """
+    parts = re.split(f"({PAUSE_PATTERN.pattern})", text)
+    for part in parts:
+        if not part:
+            continue
+        if PAUSE_PATTERN.fullmatch(part):
+            yield ("pause", dots_to_ms(part))
+        else:
+            yield ("text", part)
+
+def chunk_long_text(s: str, max_len: int = 3800):
+    """
+    Split long text into <= max_len chunks on sentence-ish boundaries.
+    This avoids API length issues on very long inputs.
+    """
+    s = s.strip()
+    if len(s) <= max_len:
+        return [s]
+    chunks, buf = [], []
+    length = 0
+    for piece in re.split(r"(\s+)", s):  # keep whitespace
+        if length + len(piece) > max_len and buf:
+            chunks.append("".join(buf).strip())
+            buf, length = [piece], len(piece)
+        else:
+            buf.append(piece)
+            length += len(piece)
+    if buf:
+        chunks.append("".join(buf).strip())
+    return chunks
+
+def synthesize_text_segment(client, text_chunk: str) -> AudioSegment:
+    """
+    Synthesize a single text chunk and return as a pydub AudioSegment.
+    We must use 'text=' (not SSML) because Chirp3-HD doesn't accept SSML.
+    """
+    synthesis_input = texttospeech.SynthesisInput(text=text_chunk)
+
     voice_params = texttospeech.VoiceSelectionParams(
-        language_code=language_code,
-        name=voice_name,
-        ssml_gender=texttospeech.SsmlVoiceGender[gender]
+        language_code=LANG_CODE,
+        name=VOICE_NAME,
+        ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL,  # ignored by named voice, still safe
     )
 
-    # Audio config
     audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3
+        audio_encoding=texttospeech.AudioEncoding.MP3,
+        speaking_rate=0.85,
     )
 
-    # Generate speech
-    response = client.synthesize_speech(
+    resp = client.synthesize_speech(
         input=synthesis_input,
         voice=voice_params,
         audio_config=audio_config
     )
 
-    # Save to file
-    output_file = f"sample_{language_code}.mp3"
-    with open(output_file, "wb") as out:
-        out.write(response.audio_content)
-        print(f"✅ Sample voice saved as {output_file}")
+    return AudioSegment.from_file(io.BytesIO(resp.audio_content), format="mp3")
+
+def synthesize_with_silences(raw_text: str, out_path: str = "output_despina.mp3"):
+    client = texttospeech.TextToSpeechClient()
+
+    final = AudioSegment.silent(duration=0)
+    for kind, payload in parse_segments(raw_text):
+        if kind == "text":
+            # Break large text parts further if needed
+            chunks = chunk_long_text(payload)
+            for ch in chunks:
+                if ch.strip():
+                    seg = synthesize_text_segment(client, ch)
+                    final += seg
+        else:  # pause
+            final += AudioSegment.silent(duration=payload)
+
+    final.export(out_path, format="mp3")
+    print(f"✅ Saved: {out_path}")
 
 if __name__ == "__main__":
-    # Example: change language_code to try different voices
-    # language_code examples: "en-US", "hi-IN", "fr-FR"
-    generate_sample(language_code="hi-IN", gender="FEMALE")
-
+    sample_text = (
+        "Episode 4: The Kindness Compass... Hello, friends! A compass helps a traveler find their direction. Today, we're going to talk about an imaginary compass inside you that always points to being kind! It's your Kindness Compass... Kindness isn't just about being 'nice.' It's about actively choosing to be helpful, caring, and understanding towards others. Being known for your kindness is one of the best personal brands you can have... Your Kindness Compass can point in many directions. It can point to Kindness to Friends, like sharing your lunch, or Kindness to Family, like helping with chores without being asked... It also points to Kindness to Nature, like watering the plants, and most importantly, Kindness to Yourself, which means being kind to yourself when you make a mistake... When you are kind to one person, it can inspire them to be kind to someone else. This is called the ripple effect. Your one small act can create a huge wave of positivity... Being kind also helps you build trust. When you are consistently kind, people know they can come to you for help. It's a very strong part of your personal brand that people will remember you for... Now, for your mission: The Kindness Compass Challenge! Pause the video for just one minute... Draw a compass in your notebook. In each direction, write down one thing you can do this week to be kind to your friends, family, nature, and yourself. You'll soon see a whole new world of possibilities... You did it! That's it for today's episode. Thank you for joining us! We'll be back soon with more episodes of Self-Branding. Keep being curious!..."
+    )
+    synthesize_with_silences(sample_text, out_path="sample_hiIN_despina_paused.mp3")
