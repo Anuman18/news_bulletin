@@ -6,13 +6,13 @@ from pydub import AudioSegment
 import re, io, os
 
 # 1) Auth
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"  # your service account
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "key.json"  
 
 VOICE_NAME = "hi-IN-Chirp3-HD-Despina"
 LANG_CODE = "hi-IN"
 
 # --- Pause mapping ---
-# Tune this to taste. Example: every 2 dots ~ 1 second, capped at 4s.
+# Tune this to taste. Example: every 2 dots ~ 1 second, capped at 4s.k
 def dots_to_ms(dots: str) -> int:
     n = len(dots)
     seconds = min(max(n // 2, 1), 4)   # "..." => 1s, "....." => 2s, "......." => 3s, cap 4s
@@ -101,6 +101,6 @@ def synthesize_with_silences(raw_text: str, out_path: str = "output_despina.mp3"
 
 if __name__ == "__main__":
     sample_text = (
-        "Episode 4: The Kindness Compass... Hello, friends! A compass helps a traveler find their direction. Today, we're going to talk about an imaginary compass inside you that always points to being kind! It's your Kindness Compass... Kindness isn't just about being 'nice.' It's about actively choosing to be helpful, caring, and understanding towards others. Being known for your kindness is one of the best personal brands you can have... Your Kindness Compass can point in many directions. It can point to Kindness to Friends, like sharing your lunch, or Kindness to Family, like helping with chores without being asked... It also points to Kindness to Nature, like watering the plants, and most importantly, Kindness to Yourself, which means being kind to yourself when you make a mistake... When you are kind to one person, it can inspire them to be kind to someone else. This is called the ripple effect. Your one small act can create a huge wave of positivity... Being kind also helps you build trust. When you are consistently kind, people know they can come to you for help. It's a very strong part of your personal brand that people will remember you for... Now, for your mission: The Kindness Compass Challenge! Pause the video for just one minute... Draw a compass in your notebook. In each direction, write down one thing you can do this week to be kind to your friends, family, nature, and yourself. You'll soon see a whole new world of possibilities... You did it! That's it for today's episode. Thank you for joining us! We'll be back soon with more episodes of Self-Branding. Keep being curious!..."
+        "Episode 5: The 'What's Your Story?' Challenge... Hello, friends! Every person is like a living, breathing storybook... Your life is filled with chapters of happiness, adventures, and learning... Your story is completely unique to you!... Sharing parts of your story helps people understand who you are beyond just your name and class... It’s how you share your personal brand's history and make it memorable... Just like in your English class, even small personal stories have a structure... Let's look at the Story Mountain for a simple event, like the day I baked a cake for the first time!... The Beginning is when Mom said we could bake a cake... The Challenge is when I spilled flour on the floor... The Climax is when we put the cake in the oven... The Result is when we decorated it... And the Lesson is when I learned that trying new things is fun!... Why does your story matter? Because stories connect us... They make you memorable... People might forget your test scores, but they will remember a funny or brave story you told them... Sharing your story also builds empathy... When you listen to a friend's story, you understand them better... And telling your own story helps you own your experiences and build your confidence... Now, for your mission: The 'What's Your Story?' Challenge!... Pause the video for just one minute... Think of a time you learned a lesson... Write down your story using the Story Mountain format... You'll soon see a whole new world of possibilities!... You did it! That's it for today's episode... Thank you for joining us!... We'll be back soon with more episodes of Self-Branding... Keep being curious!..."
     )
     synthesize_with_silences(sample_text, out_path="sample_hiIN_despina_paused.mp3")
